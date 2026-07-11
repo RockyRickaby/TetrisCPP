@@ -12,6 +12,7 @@ add_executable(${TARGET_MAIN}
 
 option(VENDORED_SDL "Use vendored SDL library" OFF)
 if(VENDORED_SDL)
+    find_package(Git REQUIRED)
     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")
         message(STATUS "SDL submodule missing. Fetching submodule via Git")
         execute_process(
