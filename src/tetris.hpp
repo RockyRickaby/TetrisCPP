@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <vector>
+#include <iterator>
 #include <iostream>
 
 namespace Tetris {
@@ -50,6 +51,7 @@ namespace Tetris {
 
         class Piece {
         public:
+            class BlockIterator;
             const Type type;
             const Tetris::Color color;
 
@@ -64,11 +66,35 @@ namespace Tetris {
             // vec has to be an empty vector
             size_t get_blocks(std::vector<Block> &vec) const;
             // Piece& operator=(Piece other);
-
         private:
             Vec2 m_pos;
             const Vec2 m_center;
             std::vector<Block> m_body;
+            
+        public:
+            BlockIterator begin() const;
+            BlockIterator end() const;
+
+            // not really necessary. just makes it a tiny little bit less annoying to render pieces on the screen
+            class BlockIterator {
+            private:
+                std::vector<Block>::const_iterator m_block_it;
+                Vec2 m_it_pos;
+            public:
+                BlockIterator(std::vector<Block>::const_iterator it, Vec2 it_pos);
+                BlockIterator& operator++();
+                BlockIterator operator++(int);
+                bool operator==(BlockIterator other);
+                bool operator!=(BlockIterator other);
+                Block operator*();
+
+                // iterator traits
+                using difference_type = std::ptrdiff_t;
+                using value_type = std::vector<Block>::const_iterator;
+                using pointer = const std::vector<Block>::const_iterator*;
+                using reference = const std::vector<Block>::const_iterator&;
+                using iterator_category = std::input_iterator_tag;
+            };
         };
     };
 }

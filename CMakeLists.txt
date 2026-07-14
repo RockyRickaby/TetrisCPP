@@ -11,6 +11,7 @@ add_executable(${TARGET_MAIN}
     src/tetris_utils.cpp
     src/tetris.cpp
     src/pieces.cpp
+    src/base.cpp
 )
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")

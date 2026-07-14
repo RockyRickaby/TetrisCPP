@@ -44,6 +44,10 @@ namespace Tetris {
             // wall kick callback () or handle it here?
             return true;
         }
+
+        Vec2 Piece::get_position(void) const {
+            return m_pos;
+        }
             
         const std::vector<Block>& Piece::get_blocks(void) const {
             return m_body;
@@ -56,6 +60,16 @@ namespace Tetris {
             }
             return vec.size();
         }
+
+        Piece::BlockIterator Piece::begin() const { return Piece::BlockIterator{m_body.begin(), m_pos}; }
+        Piece::BlockIterator Piece::end() const { return Piece::BlockIterator{m_body.end(), m_pos}; }
+
+        Piece::BlockIterator::BlockIterator(std::vector<Block>::const_iterator it, Vec2 it_pos) : m_block_it{it}, m_it_pos{it_pos} {}
+        Piece::BlockIterator& Piece::BlockIterator::operator++() { ++m_block_it; return *this; }
+        Piece::BlockIterator Piece::BlockIterator::operator++(int) { BlockIterator b = *this; ++(*this); return b; }
+        bool Piece::BlockIterator::operator==(BlockIterator other) { return m_block_it == other.m_block_it; }
+        bool Piece::BlockIterator::operator!=(BlockIterator other) { return m_block_it != other.m_block_it; }
+        Block Piece::BlockIterator::operator*() { Block r = *m_block_it; r += m_it_pos; return r; }
 
         const std::unordered_map<Type, Piece> DEFAULT_PIECES = {
             {Type::NONE, Piece{Type::NONE, {}, {}, {}}},
