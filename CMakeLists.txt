@@ -9,9 +9,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(${TARGET_MAIN}
     src/main.cpp
     src/tetris_utils.cpp
-    src/tetris.cpp
     src/pieces.cpp
     src/base.cpp
+    src/kicks.cpp
 )
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")
@@ -45,7 +45,7 @@ endif()
 
 target_compile_options(${TARGET_MAIN} PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
-        -Wall -Wextra -Wpedantic
+        -Wall -Wextra -Wpedantic -fdiagnostics-color=always
     >
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
