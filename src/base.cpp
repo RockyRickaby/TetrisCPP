@@ -64,7 +64,7 @@ namespace Tetris {
     }
 
     bool Vec2::operator!=(const Vec2 &other) const {
-        return this->x != other.x && this->y != other.y;
+        return this->x != other.x || this->y != other.y;
     }
 
     // Block Block::operator+(const Vec2 &other) const {
