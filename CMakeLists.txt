@@ -2,16 +2,14 @@ cmake_minimum_required(VERSION 4.0)
 project(TetrisCPP VERSION 0 LANGUAGES CXX)
 
 set(TARGET_MAIN main)
-set(SDL_TESTS OFF)
-set(SDL_EXAMPLES OFF)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_executable(${TARGET_MAIN}
+add_executable(${TARGET_MAIN} WIN32
     src/main.cpp
-    src/tetris_utils.cpp
     src/pieces.cpp
     src/base.cpp
     src/kicks.cpp
+    src/tetris_utils.cpp
+    src/tetris_engine.cpp
+    src/tetris_bags.cpp
 )
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")
@@ -40,8 +38,14 @@ if(VENDORED_SDL)
     add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
 else()
     message(STATUS "Using packaged SDL")
-    find_package(SDL3 REQUIRED CONFIG) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
+    find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
 endif()
+
+set_target_properties(${TARGET_MAIN} PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    # OUTPUT_NAME "TPP"
+)
 
 target_compile_options(${TARGET_MAIN} PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
@@ -51,5 +55,3 @@ target_compile_options(${TARGET_MAIN} PRIVATE
 )
 # target_compile_features(${TARGET_MAIN} PUBLIC ${needed_features})
 target_link_libraries(${TARGET_MAIN} PRIVATE SDL3::SDL3)
-
-# set_property(TARGET ${TARGET_MAIN} PROPERTY WIN32_EXECUTABLE TRUE)

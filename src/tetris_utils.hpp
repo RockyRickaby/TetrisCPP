@@ -6,7 +6,13 @@
 
 namespace TetrisUtils {
     namespace __Eval {
+        // uppercase letters stay uppercased
+        // written for that compile-time evaluation
+        // anything else that is not a letter may or may not change to something else completely unrelated
         inline constexpr unsigned char to_uppercase(unsigned char h) {
+            // 6th bit changes from 1 (lowercase) to 0 (uppercase) (or remains unchanged if it's already 0)
+            // ex.: 65 & ~(1 << 5) == 65, 65 == 'A'
+            // ex.: 97 & ~(1 << 5) == 65, 97 == 'a' && 65 == 'A'
             return (h & ~(1 << 5));
         }
 
@@ -18,7 +24,7 @@ namespace TetrisUtils {
         }
     }
     // assumes the format #RRGGBB. alpha is set to 255 by default
-    constexpr Tetris::Color color_from_hex(std::string_view hex, Uint8 alpha = 255U) {
+    inline constexpr Tetris::Color color_from_hex(std::string_view hex, Uint8 alpha = 255U) {
         // uint32_t color = std::stoi(hex, nullptr, 16);
         if (hex[0] == '#') {
             hex = hex.substr(1);
@@ -34,7 +40,7 @@ namespace TetrisUtils {
     // assumes rot has size >=2 and only contains the characters 0, R, 2, L and, optionally, - and > (to form a little arrow)
     // results are undefined if any of the characters are not those listed here
     // if rot represents an invalid rotation, the returned value will also be invalid
-    constexpr int rotstr_to_int(std::string_view rot) {
+    inline constexpr int rotstr_to_int(std::string_view rot) {
         int fst = 0;
         int lst = rot.length() > 2 ? rot.length() - 1 : 1;
         int res = 0;
