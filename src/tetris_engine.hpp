@@ -53,36 +53,58 @@ namespace Tetris::Engine {
         }
     };
 
+    // TODO - overhaul this to use GetKeyboardState().... maybe.
+    // it would allow for some simultaneous actions to happen
     struct GameInput {
+        enum class __KeyState {
+            KEYSTATE_UP,
+            KEYSTATE_PRESSED,
+            KEYSTATE_WAIT,
+            KEYSTATE_REPEAT
+        };
         enum class Keybinds {
             KEYBIND_DEFAULT, // uses arrow keys
             KEYBIND_IJKL,
         };
-        struct State {
+        // never repeats
+        struct KeyEvent {
             SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
             bool pressed = false;
-            bool is_repeat = false;
         };
-        bool has_input = false;
-        // Tetris::Vec2 move_vec{};
-        // Tetris::Tetrimino::Rotation rotation{};
+        // may or may not repeat
+        struct KeyState {
+            bool pressed = false;
+            bool may_repeat = true; 
+            SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
 
+            Countdown m_repeat_delay{0.3, true};
+            Countdown m_repeat_interval{0.025, true};
+            Time m_timer;
+            __KeyState m_keystate{0};
+        };
         struct {
-            State left{};
-            State right{};
-            State down{}; // TODO soft drop. should be continuous (?) (auto-repeat?) (DONE? kinda)
-            State autorepeat{}; // might not be used. for allowing a continuous press to move the piece quickly. might be unnecessary
-            State hard_drop{};
-            State rotate_clockwise{};
-            State rotate_counterclockwise{};
-            State hold_piece{};
-            State pause{};
+            KeyState left{};
+            KeyState right{};
+            KeyState down{};
+            KeyState rotate_clockwise{};
+            KeyState rotate_counterclockwise{};
+
+            KeyEvent hard_drop{};
+            KeyEvent hold_piece{};
+            KeyEvent pause{};
         } key{};
+        
+        bool has_input_event = false;
 
         bool setup_keys(Keybinds bind_settings);
-        void read_input(const SDL_KeyboardEvent &keyboard);
-        // return a tuple in case we want to return more things later (unlikely)
-        std::tuple<Tetris::Vec2, Tetris::Tetrimino::Rotation> handle_input(void);
-        void reset_states(void);
+        // for anything non-movement related
+        void read_input_event(const SDL_KeyboardEvent &keyboard);
+        // std::tuple<Tetris::Vec2, Tetris::Tetrimino::Rotation> read_input_event(void);
+        // only for movement related actions
+        std::tuple<Tetris::Vec2, Tetris::Tetrimino::Rotation> read_input_state(void); 
+        void reset_events(void);
+        
+        // not intended for external usage, but will work just fine
+        bool may_press(KeyState &key);
     };
 }

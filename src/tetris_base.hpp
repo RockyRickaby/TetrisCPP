@@ -48,6 +48,7 @@ namespace Tetris {
             NONE, I, J, L, O, S, Z, T, CUSTOM
         };
 
+        // non-virtual destructor
         class Piece {
         public:
             Piece();
@@ -86,8 +87,8 @@ namespace Tetris {
             void update_bounds(Vec2 r);
         public:
             class BlockIterator;
-            BlockIterator begin() const { return Piece::BlockIterator{m_body.begin(), m_pos}; }
-            BlockIterator end() const { return Piece::BlockIterator{m_body.end(), m_pos}; }
+            BlockIterator begin() const { return Piece::BlockIterator{m_body.cbegin(), m_pos}; }
+            BlockIterator end() const { return Piece::BlockIterator{m_body.cend(), m_pos}; }
 
             // not really necessary. just makes it a tiny little bit less annoying to render pieces on the screen
             class BlockIterator {

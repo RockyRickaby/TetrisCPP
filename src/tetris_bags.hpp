@@ -9,6 +9,9 @@
 
 #if __cplusplus >= 202002L
 namespace Tetris { namespace Tetrimino { class Piece; } };
+// Note about the draw function:
+//     offset_x and offset_y (first and second float arguments respectively) have to be in pixels.
+//     block_scale (the last float argument) has to be the size units of each individual block (not pixels) (i.e.: 1, 2 or 3.5).
 template<typename T>
 concept TetriminoQueue = requires(T bag, SDL_Renderer *renderer, float offset_x, float offset_y, float block_scale) {
     { bag() } -> std::same_as<Tetris::Tetrimino::Piece>;
