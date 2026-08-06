@@ -1,12 +1,11 @@
-#include <iostream>
 #include <vector>
 #include <algorithm>
 #include <unordered_map>
-#include <map>
+// #include <map>
 #include <type_traits>
 #include <SDL3/SDL_rect.h>
 
-#include "tetris_base.hpp"
+#include "tetris_pieces.hpp"
 #include "tetris_utils.hpp"
 
 namespace Tetris {

@@ -1,11 +1,9 @@
 #pragma once
 
-#include <algorithm>
-#include <deque>
 #include <random>
 #include <SDL3/SDL_render.h>
 
-#include "tetris_base.hpp"
+#include "tetris_pieces.hpp"
 
 #if __cplusplus >= 202002L
 namespace Tetris { namespace Tetrimino { class Piece; } };
@@ -30,15 +28,8 @@ namespace Tetris {
             Tetrimino::Piece operator()() {return Tetrimino::get_piece(T);}
             // these arguments may eventually be used, but currently, they're just here
             // so that the struct is compatible with the TetriminoQueue concept
-            void draw(SDL_Renderer* renderer, float, float, float) {
-                const auto& p = Tetrimino::get_piece(T);
-                Color c = p.get_color();
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
-                for (const auto& [x, y] : p.get_blocks()) {
-                    SDL_FRect r { .x = (x + 20) * 20, .y = (y + 20) * 20, .w = 20, .h = 20 };
-                    SDL_RenderFillRect(renderer, &r);
-                }
-            }
+            void draw(SDL_Renderer* renderer, float, float, float) {}
+            void reset() {}
         };
 
         // unfairly random... not very useful
@@ -50,7 +41,6 @@ namespace Tetris {
             void reset();
 
         private:
-            std::deque<Tetrimino::Type> m_bag;
             std::random_device rd;
             std::mt19937 m_random_engine;
             std::uniform_int_distribution<int> m_dist;

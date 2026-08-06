@@ -1,7 +1,4 @@
 #include <iostream>
-#include <numeric>
-
-#include "tetris_bags.hpp"
 #include "tetris_base.hpp"
 
 namespace Tetris {

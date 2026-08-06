@@ -4,14 +4,17 @@ project(TetrisCPP VERSION 0 LANGUAGES CXX)
 set(TARGET_MAIN main)
 add_executable(${TARGET_MAIN} WIN32
     src/main.cpp
-    src/pieces.cpp
-    src/base.cpp
-    src/kicks.cpp
-    src/tetris_utils.cpp
-    src/tetris_engine.cpp
-    src/tetris_bags.cpp
-)
-
+    src/tetris.cpp
+    src/tetris/tetris_pieces.cpp
+    src/tetris/tetris_base.cpp
+    src/tetris/tetris_kicks.cpp
+    src/tetris/tetris_utils.cpp
+    src/tetris/tetris_bags.cpp
+    src/tetris/tetris_state_machines/tetris_game_sm.cpp
+    src/engine/tengine.cpp
+    src/engine/state_machine.cpp
+    )
+    
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")
     set(VENDORED_SDL_EXISTS ON)
 else()

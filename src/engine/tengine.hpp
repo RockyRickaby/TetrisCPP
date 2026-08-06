@@ -1,11 +1,18 @@
 #pragma once
 
 #include <SDL3/SDL_timer.h>
+#include <SDL3/SDL_events.h>
 #include <SDL3/SDL_scancode.h>
 
-#include "tetris_base.hpp"
+// TODO - find out way to remove this dependency from here
+#include "../tetris/tetris_base.hpp"
 
-namespace Tetris::Engine {
+namespace TEngine {
+    // defined below
+    struct GameInput;
+
+    using GameInputEventHandler = GameInput;
+    using GameInputStateHandler = GameInput;
     // Constructor should be called after initializing SDL
     // Calculates the delta time between frames
     class Time {
@@ -53,7 +60,7 @@ namespace Tetris::Engine {
         }
     };
 
-    // TODO - overhaul this to use GetKeyboardState().... maybe.
+    // TODO - move this to a different place
     // it would allow for some simultaneous actions to happen
     struct GameInput {
         enum class __KeyState {
@@ -74,10 +81,10 @@ namespace Tetris::Engine {
         // may or may not repeat
         struct KeyState {
             bool pressed = false;
-            bool may_repeat = true; 
+            bool may_repeat = true;
             SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
 
-            Countdown m_repeat_delay{0.3, true};
+            Countdown m_repeat_delay{0.27, true};
             Countdown m_repeat_interval{0.025, true};
             Time m_timer;
             __KeyState m_keystate{0};
@@ -101,7 +108,8 @@ namespace Tetris::Engine {
         void read_input_event(const SDL_KeyboardEvent &keyboard);
         // std::tuple<Tetris::Vec2, Tetris::Tetrimino::Rotation> read_input_event(void);
         // only for movement related actions
-        std::tuple<Tetris::Vec2, Tetris::Tetrimino::Rotation> read_input_state(void); 
+        std::tuple<Tetris::Vec2, Tetris::Tetrimino::Rotation> read_input_state(void);
+        // TODO - consider way to eliminate this
         void reset_events(void);
         
         // not intended for external usage, but will work just fine

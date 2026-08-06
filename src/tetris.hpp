@@ -4,10 +4,10 @@
 #include <array>
 #include <algorithm>
 
-#include "tetris_base.hpp"
-#include "tetris_bags.hpp"
-#include "tetris_engine.hpp"
-// #include "tetris_utils.hpp" // rotstr_to_int
+#include "tetris/tetris_base.hpp"
+#include "tetris/tetris_bags.hpp"
+#include "tetris/tetris_pieces.hpp"
+#include "engine/tengine.hpp"
 
 namespace Tetris {
     namespace __Internal {
@@ -26,22 +26,31 @@ namespace Tetris {
     // matrix grows UPWARDS and to the right. must be flipped when rendered
     // note: not trivially copyable (duh)
     // note2: fully defined in header because template
-    template<TetriminoQueue Queue, int ROWS = 22, int COLUMNS = 10, int BUFFER = 5>
+    template<TetriminoQueue Queue>
     class Game {
     public:
-        bool init(int screen_width, int screen_height, float block_scale) {
-            // m_playfield_rtexture = playfield_rendertexture;
-            m_scale = block_scale;
-            m_board_offset_x = (screen_width - COLUMNS * block_scale) / 2.0f;
-            m_board_offset_y = (screen_height - ROWS * block_scale) / 2.0f;
+        static constexpr int ROWS = 22;
+        static constexpr int COLUMNS = 10;
+        static constexpr int BUFFER = 5;
 
-            m_started = true;
-            spawn_next_piece();
+        // constructor initializes the game. it will be ready to run
+        Game(int screen_width, int screen_height, float block_scale) :
+            m_scale{block_scale},
+            m_board_offset_x{(screen_width - COLUMNS * block_scale) / 2.0f},
+            m_board_offset_y{(screen_height - ROWS * block_scale) / 2.0f}
+        {
             m_playfield_matrix.fill(Color{});
             m_line_block_count.fill(0);
             update_playfield_routine.game_ptr = this; // TODO - dangerous... think of better options
-            return true;
+
+            spawn_next_piece();
         }
+
+        // bool init(void) {
+            // m_started = true;
+            // spawn_next_piece();
+            // return true;
+        // }
 
         void restart(void) {
             m_playfield_matrix.fill(Color{});
@@ -56,12 +65,11 @@ namespace Tetris {
             m_piece_drop_timer.m_time_delta = 1;
             spawn_next_piece();
         }
-        // what to do:
-        // - update grid when piece is locked
+
         bool update(double delta_t) {
-            if (!m_started) {
-                return false;
-            }
+            // if (!m_started) {
+                // return false;
+            // }
             if (m_updating_playfield) {
                 m_updating_playfield = !update_playfield_routine(delta_t, [this](int cleared){
                     scoreboard.update(cleared);
@@ -82,7 +90,7 @@ namespace Tetris {
             }
             if (std::find(m_line_block_count.begin(), m_line_block_count.end(), COLUMNS) != m_line_block_count.end()) {
                 // this specific call will just "prepare" the routine, collecting the ranges with blocks to clear
-                m_updating_playfield = !update_playfield_routine(delta_t, []<typename... F>(F... args){});
+                m_updating_playfield = !update_playfield_routine(delta_t, []<typename... F>(F&&...){}); // to silence warnings....
             }
             update_ghostpiece();
             return true;
@@ -110,9 +118,7 @@ namespace Tetris {
         void draw(SDL_Renderer *renderer) {
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
             SDL_RenderClear(renderer);
-            // if (m_ghost.get_position() != m_current.get_position()) {
-                draw_piece(renderer, m_ghost, true, 128);
-            // }
+            draw_piece(renderer, m_ghost, true, 128);
             draw_piece(renderer, m_current);
             draw_playfield_blocks(renderer);
             draw_playfield_grid(renderer);
@@ -122,14 +128,9 @@ namespace Tetris {
             m_pieces_bag.draw(renderer, m_board_offset_x + (COLUMNS + 1) * m_scale, m_board_offset_y + 6 * m_scale, new_scale);
         }
     private:
-        enum class GameState {
-            UNINITIALIZED,
-            ONGOING,
-            PAUSE,
-            ANIMATION,
-        };
-        // TODO - organize this
         inline static constexpr Vec2 __invalid_move_vec = { 0xFFFF, 0xFFFF };
+
+        // TODO - organize this
         std::array<Color, (ROWS + BUFFER) * COLUMNS> m_playfield_matrix = {}; // +5 rows of extra buffer
         std::array<std::uint8_t, ROWS + BUFFER> m_line_block_count = {};
 
@@ -137,11 +138,10 @@ namespace Tetris {
         Tetrimino::Piece m_current{};
         Tetrimino::Piece m_ghost{};
         Tetrimino::Piece m_held{};
+
         Tetrimino::Rotation m_nextrot = Tetrimino::Rotation::NONE;
         Vec2 m_nextdir = __invalid_move_vec;
 
-        GameState m_state;
-        bool m_started = true;
         bool m_hard_drop = false;
         bool m_hold_piece = false;
         bool m_game_over = false;
@@ -152,12 +152,13 @@ namespace Tetris {
         float m_scale = 20;
         float m_board_offset_x = ((32 - COLUMNS) / 2.0f) * m_scale;
         float m_board_offset_y = 1 * m_scale;
-        Engine::Countdown m_piece_drop_timer = Engine::Countdown{1, true};
+        TEngine::Countdown m_piece_drop_timer = TEngine::Countdown{1, true};
 
+        // TODO - move this somewhere else (reduce clutter)
         // extended placement lock down variables
         // can also be used for infinite placement lock down or classic lock down if moves is ignored
         struct __PieceLockdownTimer {
-            Engine::Countdown timer = Engine::Countdown{0.5, true};
+            TEngine::Countdown timer = TEngine::Countdown{0.5, true};
             int moves = 15;
 
             void reset(void) {
@@ -166,6 +167,7 @@ namespace Tetris {
             }
         } m_piece_lock;
 
+        // TODO - move this somewhere else (reduce clutter)
         struct __ScoreSystem {
             uint64_t score = 0;
             int level = 1;
@@ -278,8 +280,9 @@ namespace Tetris {
                     place_and_spawn_next_piece();
                 }
             } else {
-                // FIXME - LOCK SHOULD ONLY BE RESET ON ROW CHANGE (I.E. IF THE PIECE MOVES UP (by wallkicking) OR DOWN)
+                // FIXME - LOCK SHOULD ONLY BE FULLY RESET ON ROW CHANGE (I.E. IF THE PIECE MOVES DOWN)
                 reset_lock();
+
                 if (m_piece_drop_timer.done(delta_t)) { // this timer will auto-reset itself (and by the place_and_spawn_next_piece() function as well)
                     if (m_min.y > 0 && !moved_down) {
                         m_current.move(Vec2{ 0, -1 });
@@ -320,7 +323,7 @@ namespace Tetris {
             return true;
         }
 
-        bool place_and_spawn_next_piece(void) {
+        bool place_current_piece(void) {
             // piece placed above the playfield -> game over condition
             if ((m_current.get_min() + m_current.get_position()).y >= ROWS - 2) {
                 m_game_over = true;
@@ -331,15 +334,20 @@ namespace Tetris {
                 m_playfield_matrix[v.x + v.y * COLUMNS] = m_current.get_color();
                 m_line_block_count[v.y] += 1;
             }
+            return true;
+        }
+
+        bool place_and_spawn_next_piece(void) {
+            place_current_piece();
             spawn_next_piece();
             m_hold_recently_swapped = false;
             return true;
         }
 
-        class __PlayfieldUpdateRoutine{
+        class __PlayfieldUpdateRoutine {
         public:
-            Game<Queue, ROWS, COLUMNS, BUFFER> *game_ptr = nullptr;
-            Engine::Countdown fps = {0.4/COLUMNS, true}; // 0.375
+            Game<Queue> *game_ptr = nullptr;
+            TEngine::Countdown fps = {0.4/COLUMNS, true}; // 0.375
 
             template<typename Callback>
             bool operator()(double delta_t, Callback scoreboard_callback) {
@@ -400,17 +408,9 @@ namespace Tetris {
                 int curr = 0;
                 int prev = 0;
                 int rows_to_clean_n = std::count(game_ptr->m_line_block_count.begin(), game_ptr->m_line_block_count.end(), 10);
-                // calculates which ranges have to be removed. range is [n,m), n = inclusive, m = exclusive
-                // this loop also deletes the rows, which prevents implementing animations !!! for now
-                // start from the bottom
                 for (int i = 0; i < ROWS + BUFFER && rows_to_clean_n > 0; ++i) {
                     if (game_ptr->m_line_block_count[i] == 10) {
                         rows_to_clean_n--;
-                        // std::fill(
-                        //     m_playfield_matrix.begin() + (i * COLUMNS),
-                        //     m_playfield_matrix.begin() + ((i * COLUMNS + COLUMNS)),
-                        //     Color{}
-                        // );
                         game_ptr->m_line_block_count[i] = 0;
                         curr++;
                     } else {
@@ -425,9 +425,7 @@ namespace Tetris {
             }
 
             void pull_down() {
-                // for (int k = m_ranges_to_remove.size() - 1; k >= 0; --k) {
                 for (auto it = m_ranges_to_remove.rbegin(); it != m_ranges_to_remove.rend(); ++it) {
-                    // const auto [fst, snd] = m_ranges_to_remove[k];
                     const auto [fst, snd] = *it;
                     m_cleared += (snd - fst);
                     std::move(

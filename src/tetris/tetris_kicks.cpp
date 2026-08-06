@@ -1,8 +1,9 @@
 #include <unordered_map>
 #include <array>
 
-#include "tetris.hpp"
+#include "../tetris.hpp"
 #include "tetris_utils.hpp"
+#include "tetris_base.hpp"
 
 // just to separate some things
 namespace Tetris {

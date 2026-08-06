@@ -1,6 +1,6 @@
-#include "tetris_engine.hpp"
+#include "tengine.hpp"
 
-namespace Tetris::Engine {
+namespace TEngine {
     static const bool *keyboard = nullptr;
 
     bool GameInput::setup_keys(Keybinds bind_settings) {
@@ -22,6 +22,11 @@ namespace Tetris::Engine {
 
         key.rotate_counterclockwise.may_repeat = false;
         key.rotate_clockwise.may_repeat = false;
+        
+        key.down.m_repeat_delay.m_time_delta = 0;
+        key.down.m_repeat_delay.reset();
+        key.down.m_repeat_interval.m_time_delta = 0.05;
+        key.down.m_repeat_interval.reset();
 
         keyboard = SDL_GetKeyboardState(nullptr);
         return true;
@@ -71,9 +76,10 @@ namespace Tetris::Engine {
     //     return pair;
     // }
     
-    std::tuple<Vec2, Tetrimino::Rotation> GameInput::read_input_state(void) {
-        // std::cout << "READING STATE\n";
+    std::tuple<Tetris::Vec2, Tetris::Tetrimino::Rotation> GameInput::read_input_state(void) {
+        using namespace Tetris;
         using Tetrimino::Rotation;
+
         Vec2 dir{};
         Rotation rot{};
         // FIXME - if <- is currently pressed and -> is then pressed at the same time, -> should be prioritized over <-.
@@ -116,10 +122,17 @@ namespace Tetris::Engine {
                     if (!key.may_repeat) {
                         return false;
                     }
+                    if (key.m_repeat_delay.m_time_delta <= 0) {
+                        key.m_keystate = __KeyState::KEYSTATE_REPEAT;
+                        return false;
+                    }
                     key.m_keystate = __KeyState::KEYSTATE_WAIT;
                     key.m_repeat_delay.done(key.m_timer.delta_time());
+                    // if delay == 0, just jump to repeat state
                 } else {
                     key.m_keystate = __KeyState::KEYSTATE_UP;
+                    key.m_repeat_delay.reset();
+                    key.m_repeat_interval.reset();
                 }
                 return false;
             }; break;
@@ -133,12 +146,14 @@ namespace Tetris::Engine {
                 } else {
                     key.m_keystate = __KeyState::KEYSTATE_UP;
                     key.m_repeat_delay.reset();
+                    key.m_repeat_interval.reset();
                     return false;
                 }
             }; break;
             case __KeyState::KEYSTATE_REPEAT: {
                 if (!keyboard[key.scancode]) {
                     key.m_keystate = __KeyState::KEYSTATE_UP;
+                    key.m_repeat_delay.reset();
                     key.m_repeat_interval.reset();
                     return false;
                 } else if (!key.m_repeat_interval.done(key.m_timer.delta_time())) {
