@@ -1,77 +1,92 @@
 #pragma once
 
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <memory>
 
-namespace TEngine::SM {
-    // change this in case different handlers are needed for each
-    namespace States {
-        // interface for the states to use in the StateMachine
-        class IState {
-        public:
-            virtual void enter(void) = 0;
-            virtual void update(double delta_t) = 0;
-            virtual void handle_input(void) = 0;
-            virtual void reset(void) = 0;
-            virtual void exit(void) = 0;
+namespace TEngine::StateMachine {
+    // State base class to be used for classes that will be used in GenericStateMachine
+    class State {
+    public:
+        virtual void enter(void) {}
+        // the double argument is for the delta_time
+        virtual void update(double) {}
+        virtual void handle_input(void) {}
+        virtual void draw(void) {}
+        virtual void reset(void) {}
+        virtual void exit(void) {}
 
-            virtual ~IState() = default;
-        };
-
-        // some states might require drawing (the ones in tetris_game_sm.hpp certainly do)
-        class IDrawableState : public IState {
-        public:
-            virtual void draw(void) = 0;
-            virtual ~IDrawableState() = default;
-        };
-
-        // may be cast to IState* as well
-        class EmptyState final : public IDrawableState {
-        public:
-            void enter(void) override {}
-            void update(double delta_t) override {}
-            void handle_input(void) override {}
-            void reset(void) override {};
-            void exit(void) override {}
-            void draw(void) override {}
-        };
-    }
-
-    class IStateMachine {
-
+        virtual ~State() = default;
     };
 
-    // TODO - move some of these to the /tetris/ folder
-    // non-virtual destructor
+    // also kinda works as a Layer base class
+    using Layer = State;
+
+    // non-virtual destructor.
+    // this class will handle the lifetime of the states by itself
+    template<typename Key = std::string, typename __Hash = std::hash<Key>>
     class GenericStateMachine {
     public:
         // must call switch_to() before handling anything
-        GenericStateMachine() : m_curr(nullptr), m_next{""}, m_states{} {}
-        GenericStateMachine(std::string init_state_id, std::unordered_map<std::string, std::unique_ptr<States::IState>>&& states) : m_curr(nullptr), m_next{""}, m_states{std::move(states)} {
+        GenericStateMachine() : m_curr(nullptr), m_next{}, m_states{}, m_switching{false} {}
+        GenericStateMachine(Key init_state_id, std::unordered_map<Key, std::unique_ptr<State, __Hash>>&& states) :
+            m_curr(nullptr),
+            m_next{},
+            m_states{std::move(states)},
+            m_switching{false}
+        {
             m_curr = m_states.at(init_state_id).get();
         }
 
-        // TODO - consider option of using shared_ptr () or raw pointers
-        GenericStateMachine& add_state(const std::string& id, std::unique_ptr<States::IState> state);
-        void remove_state(const std::string& id);
-        void clear(void);
-        void switch_to(const std::string& id);
+        template<typename T, typename... Args> requires(std::is_base_of_v<State, T>)
+        GenericStateMachine& add_state(const Key& id, Args&&... args) {
+            m_states.insert(std::make_pair(id, std::make_unique<T>(std::forward<Args>(args)...)));
+            return *this;
+        }
+        void remove_state(const Key& id) {
+            m_states.erase(id);
+        }
+        void clear(void) {
+            m_states.clear();
+            m_next.clear();
+            m_curr = nullptr;
+        }
+        void switch_to(const Key& id) {
+            // if no state is active, switch immediately
+            if (!m_curr) {
+                m_curr = m_states.at(id).get();
+                m_curr->enter();
+            } else {
+                m_switching = true;
+                m_next = id;
+            }
+        }
         
         void update(double delta_t) { update_state(); m_curr->update(delta_t); }
         void handle_input(void) { m_curr->handle_input(); }
-        // TODO - mm... consider whether to put rendering logic somewhere else
         void draw(void) {
-            States::IDrawableState *drawable = dynamic_cast<States::IDrawableState*>(m_curr);
-            if (drawable) {
-                drawable->draw();
-            }
+            m_curr->draw();
         }
     private:
-        States::IState *m_curr;
-        std::string m_next;
-        std::unordered_map<std::string, std::unique_ptr<States::IState>> m_states;
+        State *m_curr;
+        Key m_next;
+        std::unordered_map<Key, std::unique_ptr<State>, __Hash> m_states;
+        bool m_switching;
 
-        void update_state(void);
+        void update_state(void) {
+            if (m_switching) {
+                // m_curr->reset();
+                m_curr->exit();
+                m_curr = m_states.at(m_next).get();
+                m_curr->enter();
+                // m_next.clear();
+                m_switching = false;
+            }
+        }
+    };
+
+    class LayerManager {
+
     };
 }

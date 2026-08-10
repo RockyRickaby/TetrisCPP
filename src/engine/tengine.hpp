@@ -1,12 +1,11 @@
 #pragma once
 
-#include <SDL3/SDL_timer.h>
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_scancode.h>
+#include <SDL3/SDL.h>
 
 // TODO - find out way to remove this dependency from here
 #include "../tetris/tetris_base.hpp"
 
+// TODO - implement little 3D software renderer as seen in mista a-zozin's video (https://github.com/tsoding/formula)
 namespace TEngine {
     // defined below
     struct GameInput;
@@ -55,12 +54,20 @@ namespace TEngine {
             }
             return false;
         }
+        void set_countdown_time(double time) {
+            m_time_delta = time;
+            reset();
+        }
+        double get_countdown_time(void) {
+            return m_time_delta;
+        }
         void reset(void) {
             m_time_counter = m_time_delta;
         }
     };
 
-    // TODO - move this to a different place
+    // TODO - move tetris specific things (input state handling, basically) to tetris folder
+    // and turn this into event polling sorta idk
     // it would allow for some simultaneous actions to happen
     struct GameInput {
         enum class __KeyState {

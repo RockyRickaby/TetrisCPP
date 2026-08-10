@@ -22,6 +22,9 @@ namespace TetrisUtils {
             return h >= '0' && h <= '9' ? h - '0' : to_uppercase(static_cast<unsigned char>(h)) - 'A' + 10;
         }
     }
+    inline constexpr std::uint32_t color_to_int32(Tetris::Color c) {
+        return (c.r << 24) | (c.g << 16) | (c.b << 8) | c.a; 
+    }
     // assumes the format #RRGGBB. alpha is set to 255 by default
     inline constexpr Tetris::Color color_from_hex(std::string_view hex, std::uint8_t alpha = 255U) {
         // uint32_t color = std::stoi(hex, nullptr, 16);
