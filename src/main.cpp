@@ -22,7 +22,7 @@ struct AppState {
     /* We will use this renderer to draw into this window every frame. */
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
-    TEngine::Text::BitmapRenderer* bm_renderer;
+    TEngine::Text::BitmapRenderer bm_renderer;
     // SDL_Texture *playfield_texture = nullptr;
     // SDL_Texture *bag_texture = nullptr;
     std::unique_ptr<Tetris::Game> game = nullptr; // use new or make it static. size is a bit big
@@ -75,13 +75,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // TetrisUtils::color_from_hex("#00E6FE");
     *appstate = state;
 
-    std::cout << std::filesystem::current_path() << std::endl;
+    // std::cout << std::filesystem::current_path() << std::endl;
     // auto& jf = TEngine::Text::BitmapFonts::JoustFont::instance();
     // joust_tmp = jf.draw_char('H');
     // joust_tmp = jf.draw_string("HOLD");
     // joust_tmp = TEngine::Text::BitmapRenderer::draw_char<TEngine::Text::BitmapFonts::JoustFont>(state->renderer, 'H');
     // joust_tmp = TEngine::Text::BitmapRenderer::draw_string<TEngine::Text::BitmapFonts::JoustFont>(state->renderer, "HOLD");
-    joust_tmp = state->bm_renderer->render_string<TEngine::Text::BitmapFonts::JoustFont>("HOLD");
+    joust_tmp = state->bm_renderer.render_string<TEngine::Text::BitmapFonts::JoustFont>("HOLD");
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
@@ -180,6 +180,6 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     // SDL_DestroyTexture(state->playfield_texture);
     // SDL_DestroyTexture(state->bag_texture);
     TEngine::Text::destroy_bitmap_text(joust_tmp);
-    TEngine::Text::destroy_bitmap_renderer(state->bm_renderer);
+    // TEngine::Text::destroy_bitmap_renderer(state->bm_renderer);
     delete state; // state->game will be destroyed here
 }

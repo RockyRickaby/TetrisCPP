@@ -20,7 +20,7 @@ namespace TEngine::Text {
     class BitmapRenderer {
     public:
         // no need for custom destroyer, as no memory should be managed here
-        BitmapRenderer(SDL_Renderer* r) : renderer{r} {}
+        BitmapRenderer(SDL_Renderer* r = nullptr) : renderer{r} {}
 
         template<typename Font> requires(std::is_base_of_v<BitmapFonts::Font, Font>)
         BitmapText render_char(char ch) {
@@ -139,7 +139,9 @@ namespace TEngine::Text {
         SDL_Renderer* renderer;
     };
 
-    BitmapRenderer* init_bitmap_renderer(SDL_Renderer* renderer);
-    void destroy_bitmap_renderer(BitmapRenderer* bmr);
+    // no need to free/destroy it.
+    BitmapRenderer init_bitmap_renderer(SDL_Renderer* renderer);
+    // you do have to destroy these though
     void destroy_bitmap_text(BitmapText text);
+    // void destroy_bitmap_renderer(BitmapRenderer* bmr);
 }
