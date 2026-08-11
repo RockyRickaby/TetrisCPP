@@ -22,7 +22,7 @@ struct AppState {
     /* We will use this renderer to draw into this window every frame. */
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
-    TEngine::Text::BitmapRenderer bm_renderer;
+    // TEngine::Text::BitmapRenderer bm_renderer;
     // SDL_Texture *playfield_texture = nullptr;
     // SDL_Texture *bag_texture = nullptr;
     std::unique_ptr<Tetris::Game> game = nullptr; // use new or make it static. size is a bit big
@@ -53,7 +53,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
     SDL_SetRenderVSync(state->renderer, true);
     SDL_SetRenderLogicalPresentation(state->renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
-    state->bm_renderer = TEngine::Text::init_bitmap_renderer(state->renderer);
+    //state->bm_renderer = TEngine::Text::init_bitmap_renderer(state->renderer);
     // state->playfield_texture = SDL_CreateTexture(state->renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 640 * 2, 480 * 2);
     // state->bag_texture = SDL_CreateTexture(state->renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 400, 200);
     // sizeof(Tetris::Game<TetrisBag>);
@@ -81,7 +81,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // joust_tmp = jf.draw_string("HOLD");
     // joust_tmp = TEngine::Text::BitmapRenderer::draw_char<TEngine::Text::BitmapFonts::JoustFont>(state->renderer, 'H');
     // joust_tmp = TEngine::Text::BitmapRenderer::draw_string<TEngine::Text::BitmapFonts::JoustFont>(state->renderer, "HOLD");
-    joust_tmp = state->bm_renderer.render_string<TEngine::Text::BitmapFonts::JoustFont>("HOLD");
+    joust_tmp = TEngine::Text::BitmapRenderer::render_string<TEngine::Text::BitmapFonts::JoustFont>(state->renderer, "HOLD");
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
@@ -162,11 +162,13 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     // SDL_RenderClear(state->renderer);
     // state->game->draw(state->renderer);
     state->game_sm.draw();
-    // SDL_RenderFillRect(state->renderer, &rec);
-    // SDL_RenderTextureRotated(state->renderer, state->playfield_texture, nullptr, nullptr, 0, nullptr, SDL_FLIP_VERTICAL);
     /* put the newly-cleared rendering on the screen. */
     SDL_FRect corner = {10,10,static_cast<float>(joust_tmp.text_data->w) * 2,static_cast<float>(joust_tmp.text_data->h) * 2};
     SDL_RenderTexture(state->renderer, joust_tmp.text_data, nullptr, &corner);
+
+    using namespace TEngine::Text;
+    BitmapRenderer::draw_string<BitmapFonts::JoustFont>(state->renderer, "HOLD\n  ON", 320, 240, 10);
+    //BitmapRenderer::draw_char<BitmapFonts::JoustFont>(state->renderer, 'H', 320, 240, 3);
     SDL_RenderPresent(state->renderer);
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
@@ -179,7 +181,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     // SDL_SetRenderVSync(state->renderer, true);
     // SDL_DestroyTexture(state->playfield_texture);
     // SDL_DestroyTexture(state->bag_texture);
-    TEngine::Text::destroy_bitmap_text(joust_tmp);
+    TEngine::Text::BitmapRenderer::destroy_bitmap_text(joust_tmp);
     // TEngine::Text::destroy_bitmap_renderer(state->bm_renderer);
     delete state; // state->game will be destroyed here
 }

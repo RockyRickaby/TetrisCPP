@@ -53,6 +53,26 @@ namespace TEngine::Text::BitmapFonts {
         SDL_RenderTexture(renderer, m_font_map, &source, &dest);
     }
 
+    void JoustFont::render_char_r(SDL_Renderer* renderer, char c, float offset_x, float offset_y, float scale) {
+        const auto idx_to_pair = [this](char ch) -> std::pair<float, float> {
+            int idx = -1;
+            if (m_char_to_idx.contains(ch)) {
+                idx = m_char_to_idx.at(ch);
+            }
+            else {
+                idx = m_char_to_idx.at(' ');
+            }
+
+            int x = idx % 10;
+            int y = idx / 10;
+            return std::make_pair<float, float>(x * 8, y * 8);
+            };
+        auto [x, y] = idx_to_pair(c);
+        SDL_FRect source = { .x = x, .y = y, .w = 8, .h = 8 };
+        SDL_FRect dest = { .x = offset_x, .y = offset_y, .w = 8 * scale, .h = 8 * scale };
+        SDL_RenderTexture(renderer, m_font_map, &source, &dest);
+    }
+
     void JoustFont::setup_map() {
         m_char_to_idx.insert({
             {'A', 0},
