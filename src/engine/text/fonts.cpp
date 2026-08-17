@@ -7,7 +7,7 @@
 
 namespace TEngine::Text::BitmapFonts {
     JoustFont::JoustFont(SDL_Renderer* renderer, const char* font_path) :
-        m_char_to_idx{}
+        m_renderer{renderer}
     {
         SDL_Surface* img = SDL_LoadPNG(font_path);
         if (!img) {
@@ -25,7 +25,6 @@ namespace TEngine::Text::BitmapFonts {
         }
         SDL_SetTextureScaleMode(img_txt, SDL_SCALEMODE_NEAREST);
         m_font_map = img_txt;
-        
         SDL_DestroySurface(img);
         setup_map();
     }
@@ -34,7 +33,7 @@ namespace TEngine::Text::BitmapFonts {
         SDL_DestroyTexture(m_font_map);
     }
 
-    void JoustFont::render_char(SDL_Renderer* renderer, SDL_Texture* texture, char c, float offset_x, float offset_y) {
+    void JoustFont::render_char_texture(char c, float offset_x, float offset_y) {
         const auto idx_to_pair = [this](char ch) -> std::pair<float, float> {
             int idx = -1;
             if (m_char_to_idx.contains(ch)) {
@@ -50,10 +49,10 @@ namespace TEngine::Text::BitmapFonts {
         auto [x, y] = idx_to_pair(c);
         SDL_FRect source = { .x = x, .y = y, .w = 8, .h = 8 };
         SDL_FRect dest = { .x = offset_x * 8, .y = offset_y * 8, .w = 8, .h = 8 };
-        SDL_RenderTexture(renderer, m_font_map, &source, &dest);
+        SDL_RenderTexture(m_renderer, m_font_map, &source, &dest);
     }
 
-    void JoustFont::render_char_r(SDL_Renderer* renderer, char c, float offset_x, float offset_y, float scale) {
+    void JoustFont::render_char_renderer(char c, float offset_x, float offset_y, float scale) {
         const auto idx_to_pair = [this](char ch) -> std::pair<float, float> {
             int idx = -1;
             if (m_char_to_idx.contains(ch)) {
@@ -70,7 +69,7 @@ namespace TEngine::Text::BitmapFonts {
         auto [x, y] = idx_to_pair(c);
         SDL_FRect source = { .x = x, .y = y, .w = 8, .h = 8 };
         SDL_FRect dest = { .x = offset_x, .y = offset_y, .w = 8 * scale, .h = 8 * scale };
-        SDL_RenderTexture(renderer, m_font_map, &source, &dest);
+        SDL_RenderTexture(m_renderer, m_font_map, &source, &dest);
     }
 
     void JoustFont::setup_map() {

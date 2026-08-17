@@ -1,158 +1,107 @@
 #include "tengine.hpp"
 
 namespace TEngine {
-    static const bool *keyboard = nullptr;
+    const bool* KeyboardState::m_keyboard = nullptr;
 
-    bool GameInput::setup_keys(Keybinds bind_settings) {
-        if (bind_settings == Keybinds::KEYBIND_DEFAULT) {
-            key.left.scancode = SDL_SCANCODE_LEFT;
-            key.right.scancode = SDL_SCANCODE_RIGHT;
-            key.down.scancode = SDL_SCANCODE_DOWN;
-            key.hard_drop.scancode = SDL_SCANCODE_UP; // FIXME - should be spacebar according to specs... we may consider whether we should consider that
-        } else if (bind_settings == Keybinds::KEYBIND_IJKL) {
-            key.left.scancode = SDL_SCANCODE_J;
-            key.right.scancode = SDL_SCANCODE_L;
-            key.down.scancode = SDL_SCANCODE_K;
-            key.hard_drop.scancode = SDL_SCANCODE_I;
+    bool KeyboardState::init_keyboard() {
+        if (m_keyboard == nullptr && SDL_WasInit(SDL_INIT_VIDEO)) {
+            m_keyboard = SDL_GetKeyboardState(nullptr);
         }
-        key.rotate_counterclockwise.scancode = SDL_SCANCODE_D; // FIXME - should be Z, LCTRL AND/or RCTRL
-        key.rotate_clockwise.scancode = SDL_SCANCODE_F; // FIXME - should be X or UP key
-        key.hold_piece.scancode = SDL_SCANCODE_SPACE; // FIXME - should be LSHIFT, RSHIFT AND/or C
-        key.pause.scancode = SDL_SCANCODE_P; // FIXME - should be ESC or F1
-
-        key.rotate_counterclockwise.may_repeat = false;
-        key.rotate_clockwise.may_repeat = false;
-        
-        key.down.m_repeat_delay.m_time_delta = 0;
-        key.down.m_repeat_delay.reset();
-        key.down.m_repeat_interval.m_time_delta = 0.05;
-        key.down.m_repeat_interval.reset();
-
-        keyboard = SDL_GetKeyboardState(nullptr);
-        return true;
+        return m_keyboard != nullptr; // will be true if initialized
     }
 
-    void GameInput::read_input_event(const SDL_KeyboardEvent &keyboard) {
-        if (keyboard.down) {
-            // only save the state of one key at a time
-            if (!keyboard.repeat) {
-                SDL_Scancode code = keyboard.scancode;
-                key.hard_drop.pressed = code == key.hard_drop.scancode;
-                key.hold_piece.pressed = code == key.hold_piece.scancode;
-                key.pause.pressed = code == key.pause.scancode;
+    Time::Time() :
+        m_freq{SDL_GetPerformanceFrequency()},
+        time_last{SDL_GetPerformanceCounter()}
+    {}
+
+    double Time::delta_time(void) {
+        Uint64 time_now = SDL_GetPerformanceCounter();
+        double delta_time = (static_cast<double>(time_now - time_last) / static_cast<double>(m_freq));
+        time_last = time_now;
+        return delta_time;
+    }
+
+    Countdown::Countdown(double count, bool autoreset) :
+        autoreset{autoreset},
+        m_time_counter{count},
+        m_time_delta{count}
+    {}
+
+    bool Countdown::done(double delta_t) {
+        m_time_counter -= delta_t;
+        if (m_time_counter <= 0) {
+            if (autoreset) {
+                reset();
             } else {
-                // these should not ever repeat
-                // key.hard_drop.pressed = false;
-                // key.rotate_clockwise.pressed = false;
-                // key.rotate_counterclockwise.pressed = false;               
+                m_time_counter += delta_t; // unlikely to happen, but prevent the value from getting tooooooo small
             }
-            has_input_event = true; // allows for repeat presses to be read without changing their states
-        } else {
-            has_input_event = false;
+            return true;
         }
+        return false;
     }
 
-    // std::tuple<Vec2, Tetrimino::Rotation> GameInput::read_input_event(void) {
-    //     using Tetrimino::Rotation;
-    //     if (!has_input_event) {
-    //         reset_states();
-    //     }
-    //     auto pair = std::make_tuple(Vec2{}, Rotation::NONE);
-    //     // process one at a time. no diagonals allowed
-    //     if (key.left.pressed) {
-    //         std::get<Vec2>(pair) = Vec2{-1,0};
-    //     } else if (key.right.pressed) {
-    //         std::get<Vec2>(pair) = Vec2{1,0};
-    //     } else if (key.down.pressed) {
-    //         std::get<Vec2>(pair) = Vec2{0,-1};
-    //     }
-        
-    //     if (key.rotate_clockwise.pressed) {
-    //         std::get<Rotation>(pair) = Rotation::CLOCKWISE;
-    //     } else if (key.rotate_counterclockwise.pressed) {
-    //         std::get<Rotation>(pair) = Rotation::COUNTERCLOCKWISE;
-    //     } else {
-    //     }
-    //     return pair;
-    // }
-    
-    std::tuple<Tetris::Vec2, Tetris::Tetrimino::Rotation> GameInput::read_input_state(void) {
-        using namespace Tetris;
-        using Tetrimino::Rotation;
-
-        Vec2 dir{};
-        Rotation rot{};
-        // FIXME - if <- is currently pressed and -> is then pressed at the same time, -> should be prioritized over <-.
-        // the opposite should also happen
-        if (may_press(key.left)) {
-            dir = Vec2{-1,0};
-        } else if (may_press(key.right)) {
-            dir = Vec2{1,0};
-        } else if (may_press(key.down)) {
-            dir = Vec2{0,-1};
-        }
-        
-        if (may_press(key.rotate_clockwise)) {
-            rot = Rotation::CLOCKWISE;
-        } else if (may_press(key.rotate_counterclockwise)) {
-            rot = Rotation::COUNTERCLOCKWISE;
-        } else {
-        }
-
-        return std::make_tuple(dir, rot);
+    void Countdown::set_countdown_time(double time) {
+        m_time_delta = time;
+        reset();
     }
 
-    void GameInput::reset_events(void) {
-        has_input_event = false;
-        key.hard_drop.pressed = false;
-        key.hold_piece.pressed = false;
-        key.pause.pressed = false;
+    double Countdown::get_countdown_time(void) {
+        return m_time_delta;
     }
 
-    bool GameInput::may_press(KeyState &key) {
+    void Countdown::reset(void) {
+        m_time_counter = m_time_delta;
+    }
+
+    bool InputHandler::may_press(Key &key) {
+        return may_press_state(key, m_kb);
+    }
+
+    bool InputHandler::may_press_state(Key &key, KeyboardState kb) {
         switch (key.m_keystate) {
-            case __KeyState::KEYSTATE_UP: {
-                if (keyboard[key.scancode]) {
-                    key.m_keystate = __KeyState::KEYSTATE_PRESSED;
+            case Key::KeyState::Up: {
+                if (kb.down(key.scancode)) {
+                    key.m_keystate = Key::KeyState::Pressed;
                     return true;
                 }
             }; break;
-            case __KeyState::KEYSTATE_PRESSED: {
-                if (keyboard[key.scancode]) {
+            case Key::KeyState::Pressed: {
+                if (kb.down(key.scancode)) {
                     if (!key.may_repeat) {
                         return false;
                     }
-                    if (key.m_repeat_delay.m_time_delta <= 0) {
-                        key.m_keystate = __KeyState::KEYSTATE_REPEAT;
+                    if (key.m_repeat_delay.get_countdown_time() <= 0) {
+                        key.m_keystate = Key::KeyState::Repeat;
                         return false;
                     }
-                    key.m_keystate = __KeyState::KEYSTATE_WAIT;
+                    key.m_keystate = Key::KeyState::Wait;
                     key.m_repeat_delay.done(key.m_timer.delta_time());
                     // if delay == 0, just jump to repeat state
                 } else {
-                    key.m_keystate = __KeyState::KEYSTATE_UP;
+                    key.m_keystate = Key::KeyState::Up;
                     key.m_repeat_delay.reset();
                     key.m_repeat_interval.reset();
                 }
                 return false;
             }; break;
-            case __KeyState::KEYSTATE_WAIT: {
-                if (keyboard[key.scancode]) {
+            case Key::KeyState::Wait: {
+                if (kb.down(key.scancode)) {
                     if (!key.m_repeat_delay.done(key.m_timer.delta_time())) {
                         return false;
                     }
-                    key.m_keystate = __KeyState::KEYSTATE_REPEAT;
+                    key.m_keystate = Key::KeyState::Repeat;
                     return true;
                 } else {
-                    key.m_keystate = __KeyState::KEYSTATE_UP;
+                    key.m_keystate = Key::KeyState::Up;
                     key.m_repeat_delay.reset();
                     key.m_repeat_interval.reset();
                     return false;
                 }
             }; break;
-            case __KeyState::KEYSTATE_REPEAT: {
-                if (!keyboard[key.scancode]) {
-                    key.m_keystate = __KeyState::KEYSTATE_UP;
+            case Key::KeyState::Repeat: {
+                if (kb.up(key.scancode)) {
+                    key.m_keystate = Key::KeyState::Up;
                     key.m_repeat_delay.reset();
                     key.m_repeat_interval.reset();
                     return false;
@@ -166,5 +115,137 @@ namespace TEngine {
                 return false;
         }
         return false;
+    }
+
+    bool Color::operator==(const Color other) const {
+        return
+            r == other.r &&
+            g == other.g &&
+            b == other.b &&
+            a == other.a;
+    }
+
+    bool Color::operator!=(const Color other) const {
+        return
+            r != other.r ||
+            g != other.g ||
+            b != other.b ||
+            a != other.a;   
+    }
+
+    Vec2 Vec2::operator+(const Vec2 other) const {
+        float x1 = this->x + other.x;
+        float y1 = this->y + other.y;
+        return Vec2{x1, y1};
+    }
+
+    Vec2 Vec2::operator*(float scalar) const {
+        float x1 = this->x * scalar;
+        float y1 = this->y * scalar;
+        return Vec2{x1, y1};
+    }
+
+    Vec2& Vec2::operator+=(const Vec2 other) {
+        x += other.x;
+        y += other.y;
+        return *this;
+    }
+
+    Vec2 Vec2::operator-(const Vec2 other) const {
+        float x1 = this->x - other.x;
+        float y1 = this->y - other.y;
+        return Vec2{x1, y1};
+    }
+
+    Vec2& Vec2::operator-=(const Vec2 other) {
+        x -= other.x;
+        y -= other.y;
+        return *this;
+    }
+
+    Vec2& Vec2::operator*=(float scalar) {
+        x *= scalar;
+        y *= scalar;
+        return *this;
+    }
+
+    bool Vec2::operator==(const Vec2 other) const {
+        return this->x == other.x
+            && this->y == other.y;
+    }
+
+    bool Vec2::operator!=(const Vec2 other) const {
+        // return this->x != other.x || this->y != other.y;
+        return !(*this == other);
+    }
+
+    Vec3 Vec3::operator+(const Vec3 other) const {
+        float x1 = this->x + other.x;
+        float y1 = this->y + other.y;
+        float z1 = this->z + other.z;
+        return Vec3{x1, y1, z1};
+    }
+
+    Vec3 Vec3::operator*(float scalar) const {
+        float x1 = this->x * scalar;
+        float y1 = this->y * scalar;
+        float z1 = this->z * scalar;
+        return Vec3{x1, y1, z1};
+    }
+
+    Vec3& Vec3::operator+=(const Vec3 other) {
+        x += other.x;
+        y += other.y;
+        z += other.z;
+        return *this;
+    }
+
+    Vec3 Vec3::operator-(const Vec3 other) const {
+        float x1 = this->x - other.x;
+        float y1 = this->y - other.y;
+        float z1 = this->z - other.z;
+        return Vec3{x1, y1, z1};
+    }
+
+    Vec3& Vec3::operator-=(const Vec3 other) {
+        x -= other.x;
+        y -= other.y;
+        z -= other.z;
+        return *this;
+    }
+
+    Vec3& Vec3::operator*=(float scalar) {
+        x *= scalar;
+        y *= scalar;
+        z *= scalar;
+        return *this;
+    }
+
+    bool Vec3::operator==(const Vec3 other) const {
+        return this->x == other.x
+            && this->y == other.y
+            && this->z == other.z;
+    }
+
+    bool Vec3::operator!=(const Vec3 other) const {
+        return !(*this == other) ;
+    }
+
+    std::ostream& operator<<(std::ostream& output, const Color& v) {
+        output << "R:" << static_cast<int>(v.r)
+               << " G:" << static_cast<int>(v.g)
+               << " B:" << static_cast<int>(v.b)
+               << " A:" << static_cast<int>(v.a);
+        return output;
+    }
+
+    std::ostream& operator<<(std::ostream& output, const Vec2& v) {
+        output << '(' << v.x << ',' << v.y << ')';
+        return output;
+    }
+
+    std::ostream& operator<<(std::ostream& output, const Vec3& v) {
+        output << '(' << v.x << ',' << v.y << ',' << v.z << ')';
+        return output;
     }
 }

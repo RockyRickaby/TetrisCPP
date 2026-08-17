@@ -5,16 +5,19 @@ set(TARGET_MAIN main)
 add_executable(${TARGET_MAIN} WIN32
     src/main.cpp
     src/tetris/tetris_game.cpp
+    src/tetris/tetris_menu.cpp
     src/tetris/tetris_pieces.cpp
-    src/tetris/tetris_base.cpp
     src/tetris/tetris_kicks.cpp
     src/tetris/tetris_utils.cpp
     src/tetris/tetris_bags.cpp
+    src/tetris/tetris_input.cpp
     src/tetris/tetris_state_machines/tetris_game_sm.cpp
+
     src/engine/tengine.cpp
     src/engine/state_machine.cpp
     src/engine/text/text_renderer.cpp
     src/engine/text/fonts.cpp
+    src/engine/sprites/sprite_renderer.cpp
 )
     
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")

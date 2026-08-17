@@ -1,5 +1,8 @@
 #include <algorithm>
 #include "tetris_bags.hpp"
+// #include "tetris_utils.hpp"
+#include "../engine/tengine.hpp"
+#include "../engine/utils.hpp"
 
 namespace Tetris{
     namespace Bag {
@@ -7,7 +10,7 @@ namespace Tetris{
         Random::Random() :
             rd{},
             m_random_engine{rd()},
-            m_dist{static_cast<int>(Tetrimino::Type::NONE) + 1, static_cast<int>(Tetrimino::Type::CUSTOM) - 1}
+            m_dist{static_cast<int>(Tetrimino::Type::None) + 1, static_cast<int>(Tetrimino::Type::Custom) - 1}
         {
             m_next = m_dist(m_random_engine);
         }
@@ -20,7 +23,7 @@ namespace Tetris{
 
         void Random::draw(SDL_Renderer *renderer, float offset_x, float offset_y, float block_scale) {
             const auto& p = Tetrimino::get_piece(static_cast<Tetrimino::Type>(m_next));
-            Color c = p.get_color();
+            TEngine::Color c = p.get_color();
             Tetrimino::Type type = p.get_type();
             SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
             for (auto [x, y] : p.get_blocks()) {
@@ -85,7 +88,7 @@ namespace Tetris{
         {
             m_pieces.reserve(static_cast<int>(Tetrimino::get_amount_of_pieces()));
             for (const auto& [type, _] : Tetrimino::get_all_pieces()) {
-                if (type != Tetrimino::Type::NONE && type != Tetrimino::Type::CUSTOM) {
+                if (type != Tetrimino::Type::None && type != Tetrimino::Type::Custom) {
                     m_pieces.push_back(type);
                 }
             }
@@ -107,7 +110,6 @@ namespace Tetris{
             return Tetrimino::get_piece(piece_type);
         }
 
-        // just assume the screen coordinated for now.... ignore the texture
         void Standard::draw(SDL_Renderer *renderer, float offset_x, float offset_y, float block_scale) {
             int i = 0;
             int lim = static_cast<int>(Tetrimino::get_amount_of_pieces()) - 1; // -1 avoids the risk of showing too many repeated pieces
@@ -116,7 +118,7 @@ namespace Tetris{
             const auto draw_full_bag = [renderer, lim, &i, offset_x, offset_y, block_scale](const std::vector<Tetrimino::Type>& vec){
                 for (auto it = vec.rbegin(); it != vec.rend() && i < lim; ++it) {
                     const auto& p = Tetrimino::get_piece(*it);
-                    Color c = p.get_color();
+                    TEngine::Color c = p.get_color();
                     SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
                     const auto type = p.get_type();
                     for (auto [x, y] : p.get_blocks()) {
@@ -142,35 +144,41 @@ namespace Tetris{
             };
             draw_full_bag(m_bag_pool);
             draw_full_bag(m_pieces);
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-            // verttical
-            SDL_RenderLine(renderer,
-                offset_x,
+            
+            float thick = 4;
+            if (block_scale < 10) {
+                thick = 1;
+            }
+            SDL_FRect vertical1 = {
+                offset_x - thick,
                 offset_y,
-                offset_x,
-                offset_y + lim * block_scale * 4
-            );
-            // verttical
-            SDL_RenderLine(renderer,
+                thick,
+                lim * block_scale * 4
+            };
+            SDL_FRect vertical2 = {
                 offset_x + 5 * block_scale,
-                offset_y,
-                offset_x + 5 * block_scale,
-                offset_y + lim * block_scale * 4
-            );
-            // horizontal
-            SDL_RenderLine(renderer,
-                offset_x,
-                offset_y,
-                offset_x + 5 * block_scale,
-                offset_y
-            );
-            // horizontal
-            SDL_RenderLine(renderer,
-                offset_x,
+                vertical1.y,
+                thick,
+                vertical1.h
+            };
+            SDL_FRect horizontal1 = {
+                offset_x - thick,
+                offset_y - thick,
+                5 * block_scale + thick * 2,
+                thick
+            };
+            SDL_FRect horizontal2 = {
+                horizontal1.x,
                 offset_y + lim * block_scale * 4,
-                offset_x + 5 * block_scale,
-                offset_y + lim * block_scale * 4
-            );
+                horizontal1.w,
+                thick
+            };
+            TEngine::Color c = TEngine::Utils::color_from_hex("#808080");
+            SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
+            SDL_RenderFillRect(renderer, &vertical1);
+            SDL_RenderFillRect(renderer, &vertical2);
+            SDL_RenderFillRect(renderer, &horizontal2);
+            SDL_RenderFillRect(renderer, &horizontal1);
         }
 
         void Standard::reset() {

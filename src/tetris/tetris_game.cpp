@@ -1,14 +1,22 @@
+#include <SDL3/SDL_render.h>
 #include <memory>
 #include <algorithm>
 
 #include "tetris_game.hpp"
-#include "tetris_utils.hpp"
+#include "../engine/text/text_renderer.hpp"
+#include "../engine/utils.hpp"
 
+// this may not be good practice, but whatever
+using namespace TEngine; // Vec2, Color, Text
+
+// TODO - add some nicer texture to the blocks
 namespace Tetris {
-    Game::Game(int screen_width, int screen_height, float block_scale) :
+    Game::Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, Text::BitmapFonts::Font* font) :
+        m_renderer{renderer},
         m_scale{block_scale},
         m_board_offset_x{(screen_width - COLUMNS * block_scale) / 2.0f},
-        m_board_offset_y{(screen_height - ROWS * block_scale) / 2.0f}
+        m_board_offset_y{(screen_height - ROWS * block_scale) / 2.0f},
+        m_text_font{font}
     {
         m_playfield_matrix.fill(Color{});
         m_line_block_count.fill(0);
@@ -19,7 +27,8 @@ namespace Tetris {
 
         // Ideally, this wouldn't be a pointer, but I'm tired of templates...
         m_pieces_bag = std::make_unique<Bag::Standard>();
-
+        m_verts.reserve(4 * (ROWS - 2) * COLUMNS);
+        m_indices.reserve(6 * (ROWS - 2) * COLUMNS); 
         spawn_next_piece();
     }
 
@@ -40,44 +49,80 @@ namespace Tetris {
         m_hold_recently_swapped = false;
         m_piece_drop_timer.set_countdown_time(1);
         spawn_next_piece();
+        regen_playfield();
     }
 
+    // returns false when the game is over.
+    // returns true if the game can still go on.
+    // the game must be restarted manually once the game is over
     bool Game::update(double delta_t) {
-        const auto update_tmp = [this, delta_t]() -> bool {
-            if (update_currentpiece(delta_t)) {
+        bool placed = false;
+        const auto update_fn = [this, delta_t](bool& placed) -> bool {
+            if (update_currentpiece(delta_t, placed)) {
                 update_ghostpiece();
                 return true;
             }
             return false;
         };
 
+        const auto gameover_fn = [this](){
+            m_update_state = GameUpdateState::GGameover;
+            return false;
+        };
+
+        bool need_regen_playfield = false;
+        // TODO - right now, the game will do nothing after the game is over. change this to something else later, idk
         switch (m_update_state) {
-            case GameUpdateState::GU_PIECE: {
-                // TODO - right now, the game will reset immediately after the game is over. change this to something else later, idk
-                if (!update_tmp()) {
-                    m_update_state = GameUpdateState::GU_GAMEOVER;
-                    // m_game_over = true;
-                    restart();
-                    return false;
+            case GameUpdateState::GPiece: {
+                bool updated = update_fn(placed);
+                if (!updated) {
+                    return gameover_fn();
                 }
-                if (std::find(m_line_block_count.begin(), m_line_block_count.end(), COLUMNS) != m_line_block_count.end()) {
-                    if (!update_playfield(delta_t)) { // if not yet fully updated
-                        m_update_state = GameUpdateState::GU_PLAYFIELD;
+                if (placed) {
+                    need_regen_playfield = true;
+                    if (std::find(m_line_block_count.begin(), m_line_block_count.end(), COLUMNS) != m_line_block_count.end()) {
+                        if (!update_playfield(delta_t)) {
+                            // if the animation is supposed to play, this branch is taken
+                            m_update_state = GameUpdateState::GPlayfield;
+                        }
+                    } else if (m_piece_spawn.get_countdown_time() > 0) {
+                        m_update_state = GameUpdateState::GSpawn;
+                    } else if (!place_and_spawn_next_piece()) {
+                        return gameover_fn();
                     }
                 }
-                return true;
             } break;
 
-            case GameUpdateState::GU_PLAYFIELD: {
+            case GameUpdateState::GPlayfield: {
+                need_regen_playfield = true;
                 if (update_playfield(delta_t)) {
-                    m_update_state = GameUpdateState::GU_PIECE;
-                    return update_tmp();
+                    if (m_piece_spawn.get_countdown_time() > 0) {
+                        m_update_state = GameUpdateState::GSpawn;
+                    } else {
+                        if (!place_and_spawn_next_piece()) {
+                            return gameover_fn();
+                        }
+                        m_update_state = GameUpdateState::GPiece;
+                    }
+                    // because the animation isn't "instantaneous", set countdown to almost done
+                    // so that the piece spawns almost immediately after the playfield is updated,
+                    // making the game a little bit more speedy
+                    m_piece_spawn.done(m_piece_spawn.get_countdown_time() - 0.0001);
                 }
-                return true;
             } break;
 
-            case GameUpdateState::GU_GAMEOVER: {
-                restart();
+            case GameUpdateState::GSpawn: {
+                if (m_piece_spawn.done(delta_t)) {
+                    if (!spawn_next_piece()) {
+                        return gameover_fn();
+                    }
+                    m_hold_recently_swapped = false;
+                    m_update_state = GameUpdateState::GPiece;
+                }
+            } break;
+
+            case GameUpdateState::GGameover: {
+                // restart();
                 return false;
             } break;
 
@@ -85,6 +130,9 @@ namespace Tetris {
                 std::clog << "Tetris::Game::update(double): reached default case somehow! oops\n";
                 // std::abort();
                 return false;
+        }
+        if (need_regen_playfield) {
+            regen_playfield();
         }
         return true;
     }
@@ -102,17 +150,36 @@ namespace Tetris {
         m_piece_drop_timer.set_countdown_time(m_scoreboard.speed);
     }
 
-    void Game::draw(SDL_Renderer *renderer) {
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-        SDL_RenderClear(renderer);
-        draw_piece(renderer, m_ghost, true, 128);
-        draw_piece(renderer, m_current);
-        draw_playfield_blocks(renderer);
-        draw_playfield_grid(renderer);
+    int64_t Game::get_score(void) {
+        return m_scoreboard.score;
+    }
+
+    void Game::draw() {
+        SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+        SDL_RenderClear(m_renderer);
+        draw_playfield_blocks();
+        draw_piece(m_ghost, true, 128);
+        draw_piece(m_current);
+        draw_playfield_grid();
 
         float new_scale = m_scale / 1.5f;
-        draw_held_piece(renderer, m_held, m_board_offset_x - 4.40 * m_scale, m_board_offset_y + 2 * m_scale, new_scale);
-        m_pieces_bag->draw(renderer, m_board_offset_x + (COLUMNS + 1) * m_scale, m_board_offset_y + 6 * m_scale, new_scale);
+        // using namespace Text;
+        // 2.15
+        // 1.75
+
+        draw_held_piece(
+            m_held,
+            m_board_offset_x - 4.40 * m_scale,
+            m_board_offset_y + 2 * m_scale,
+            new_scale
+        );
+        m_pieces_bag->draw(
+            m_renderer,
+            m_board_offset_x + (COLUMNS + 1) * m_scale,
+            m_board_offset_y + 6 * m_scale,
+            new_scale
+        );
+        draw_text_elements();
     }
 
     bool Game::try_move(bool &moved_down) {
@@ -140,7 +207,7 @@ namespace Tetris {
 
     bool Game::try_rotate(void) {
         bool rotated = false;
-        if (m_nextrot != Tetrimino::Rotation::NONE) {
+        if (m_nextrot != Tetrimino::Rotation::None) {
             m_current.rotate(m_nextrot);
             if (!perform_wallkick(m_current)) {
                 m_current.rotate(Tetrimino::get_opposite_rotation(m_nextrot));
@@ -149,13 +216,16 @@ namespace Tetris {
                 m_ghost.rotate(m_nextrot);
                 rotated = true;
             }
-            m_nextrot = Tetrimino::Rotation::NONE;
+            m_nextrot = Tetrimino::Rotation::None;
         }
         return rotated;
     }
 
-    bool Game::update_currentpiece(double delta_t) {
+    bool Game::update_currentpiece(double delta_t, bool& placed) {
         // no need for states here... it's too simple for all that
+        if (m_current.get_type() == Tetrimino::Type::None) {
+            return true;
+        }
         if (m_hold_piece) {
             m_hold_piece = false;
             if (!m_hold_recently_swapped) {
@@ -166,7 +236,7 @@ namespace Tetris {
         if (m_hard_drop) {
             perform_hard_drop(m_current);
             m_hard_drop = false;
-            return place_and_spawn_next_piece();
+            return placed = place_current_piece();
         }
         bool rotated = try_rotate();
         bool moved_down = false;
@@ -178,17 +248,22 @@ namespace Tetris {
         // undo test move
         m_current.move(Vec2{0,1});
         // NOTE - issues with this part may be caused by the input handling that happens outside of this class
+        // TODO - lockdown is still not quite correct. it should only be reset on moved_down if the y-value is lower
+        // than the one of the surface that was last hit
         if (is_downwards_obstructed) {
+            m_piece_lock.prev_y = m_current.get_position().y + m_current.get_min().y;
             // to have infinite placement lock down, just remove the lock.moves check
             if ((moved || rotated) && m_piece_lock.moves > 0) {
                 m_piece_lock.moves -= 1;
                 m_piece_lock.timer.reset();
+                // std::cout << m_piece_lock.moves << std::endl;
                 // reset_piece_lock_timer();
             } else if (m_piece_lock.timer.done(delta_t)) {
-                return place_and_spawn_next_piece();
+                // std::cout << "locking\n";
+                return placed = place_current_piece();
             }
         } else {
-            if (moved_down) {
+            if (moved_down && m_current.get_position().y + m_current.get_min().y < m_piece_lock.prev_y) {
                 reset_piece_lock_timer();
             }
             
@@ -199,19 +274,22 @@ namespace Tetris {
                     reset_piece_lock_timer();
                     if (check_collision(m_current)) {
                         m_current.move(Vec2{ 0, 1 });
-                        return place_and_spawn_next_piece();
+                        return placed = place_current_piece();
                     }
                 } else if (m_min.y <= 0) {
-                    return place_and_spawn_next_piece();
+                    return placed = place_current_piece();
                 }
             }
         }
+        placed = false;
         return true;
     }
 
     void Game::update_ghostpiece(void) {
-        m_ghost.move_position(m_current.get_position());
-        perform_hard_drop(m_ghost);
+        if (m_ghost.get_type() != Tetrimino::Type::None) {
+            m_ghost.move_position(m_current.get_position());
+            perform_hard_drop(m_ghost);
+        }
     }
 
     bool Game::update_playfield(double delta_t) {
@@ -237,9 +315,11 @@ namespace Tetris {
         }
         m_piece_drop_timer.reset();
         m_piece_lock.timer.reset();
+        perform_hard_drop(m_ghost);
         return true;
     }
 
+    // safe to call if the current piece is empty
     bool Game::place_current_piece(void) {
         // piece placed above the playfield -> game over condition
         if ((m_current.get_min() + m_current.get_position()).y >= ROWS - 2) {
@@ -251,9 +331,13 @@ namespace Tetris {
             m_playfield_matrix[v.x + v.y * COLUMNS] = m_current.get_color();
             m_line_block_count[v.y] += 1;
         }
+        // TODO - just a warning
+        m_ghost = {};
+        m_current = {};
         return true;
     }
 
+    // safe to call if the current piece is empty
     bool Game::place_and_spawn_next_piece(void) {
         if (!place_current_piece()) {
             return false;
@@ -275,7 +359,7 @@ namespace Tetris {
         bool collides = !check_within_bounds(p);
         for (auto it = p.begin(); it != p.end() && !collides; ++it) {
             Vec2 v = *it;
-            collides = TetrisUtils::color_to_int32(m_playfield_matrix[v.x + v.y * COLUMNS]) != 0;
+            collides = TEngine::Utils::color_to_int32(m_playfield_matrix[v.x + v.y * COLUMNS]) != 0;
         }
         return collides;
     }
@@ -283,7 +367,7 @@ namespace Tetris {
     bool Game::perform_hold() {
         if (!m_hold_recently_swapped) {
             bool needs_spawn = false;
-            if (m_held.get_type() == Tetrimino::Type::NONE) {
+            if (m_held.get_type() == Tetrimino::Type::None) {
                 m_held = Tetrimino::get_piece(m_current.get_type());
                 needs_spawn = true;
             } else {
@@ -343,29 +427,29 @@ namespace Tetris {
         return false;
     }
 
-    void Game::draw_piece(SDL_Renderer *renderer, const Tetrimino::Piece& p, bool fill, Uint8 alpha) {
+    void Game::draw_piece(const Tetrimino::Piece& p, bool fill, Uint8 alpha) {
         Color c = p.get_color();
         SDL_BlendMode mode;
-        SDL_GetRenderDrawBlendMode(renderer, &mode);
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, alpha);
+        SDL_GetRenderDrawBlendMode(m_renderer, &mode);
+        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(m_renderer, c.r, c.g, c.b, alpha);
         for (auto [x, y] : p) {
             SDL_FRect r{ .x = x * m_scale + m_board_offset_x, .y = ((ROWS - 1) - y) * m_scale + m_board_offset_y, .w = m_scale, .h = m_scale };
             if (fill) {
-                SDL_RenderFillRect(renderer, &r);
+                SDL_RenderFillRect(m_renderer, &r);
             } else {
-                SDL_RenderRect(renderer, &r);
+                SDL_RenderRect(m_renderer, &r);
             }
         }
-        SDL_SetRenderDrawBlendMode(renderer, mode);
+        SDL_SetRenderDrawBlendMode(m_renderer, mode);
     };
 
-    void Game::draw_held_piece(SDL_Renderer* renderer, const Tetrimino::Piece& p, float offset_x, float offset_y, float scale){
+    void Game::draw_held_piece(const Tetrimino::Piece& p, float offset_x, float offset_y, float scale){
         Color c = p.get_color();
         SDL_BlendMode mode;
-        SDL_GetRenderDrawBlendMode(renderer, &mode);
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
+        SDL_GetRenderDrawBlendMode(m_renderer, &mode);
+        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(m_renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
         const auto type = p.get_type();
         for (auto [x, y] : p.get_blocks()) {
             float extra_off_x = 2;
@@ -378,57 +462,66 @@ namespace Tetris {
 
                 }
             SDL_FRect r{ .x = (x + extra_off_x) * scale + offset_x, .y = offset_y - (y - extra_off_y) * scale, .w = scale, .h = scale };
-            SDL_RenderFillRect(renderer, &r);
+            SDL_RenderFillRect(m_renderer, &r);
         }
-        SDL_SetRenderDrawBlendMode(renderer, mode);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-        // verttical
-        SDL_RenderLine(renderer,
-            offset_x,
-            offset_y,
-            offset_x,
-            offset_y + 5 * scale
-        );
-        // verttical
-        SDL_RenderLine(renderer,
+        SDL_SetRenderDrawBlendMode(m_renderer, mode);
+        
+        float thick = 4;
+        if (m_scale < 10) {
+            thick = 1;
+        }
+        SDL_FRect vertical1 = {
+            offset_x - thick,
+            offset_y - thick,
+            thick,
+            5 * scale + thick * 2
+        };
+        SDL_FRect vertical2 = {
             offset_x + 5 * scale,
-            offset_y,
-            offset_x + 5 * scale,
-            offset_y + 5 * scale
-        );
-        // horizontal
-        SDL_RenderLine(renderer,
+            vertical1.y,
+            thick,
+            vertical1.h
+        };
+        SDL_FRect horizontal1 = {
             offset_x,
-            offset_y,
-            offset_x + 5 * scale,
-            offset_y
-        );
-        // horizontal
-        SDL_RenderLine(renderer,
-            offset_x,
+            offset_y - thick,
+            5 * scale,
+            thick
+        };
+        SDL_FRect horizontal2 = {
+            horizontal1.x,
             offset_y + 5 * scale,
-            offset_x + 5 * scale,
-            offset_y + 5 * scale
-        );
+            horizontal1.w,
+            thick
+        };
+        Color border_color = TEngine::Utils::color_from_hex("#808080");
+        SDL_SetRenderDrawColor(m_renderer, border_color.r, border_color.g, border_color.b, SDL_ALPHA_OPAQUE);
+        SDL_RenderFillRect(m_renderer, &vertical1);
+        SDL_RenderFillRect(m_renderer, &vertical2);
+        SDL_RenderFillRect(m_renderer, &horizontal2);
+        SDL_RenderFillRect(m_renderer, &horizontal1);
     }
 
-    void Game::draw_playfield_blocks(SDL_Renderer *renderer) {
-        for (int i = 0; i < ROWS - 2; i++) {
-            for (int j = 0; j < COLUMNS; j++) {
-                Color c = m_playfield_matrix[j + i * COLUMNS];
-                if (c.a != 0) {
-                    SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
-                    SDL_FRect r = {j * m_scale + m_board_offset_x, ((ROWS - 1) - i) * m_scale + m_board_offset_y, m_scale, m_scale};
-                    SDL_RenderFillRect(renderer, &r);
-                }
-            }
-        }
+    // TODO - only redraw what's changed instead of everything... eventually
+    void Game::draw_playfield_blocks() {
+        SDL_RenderGeometry(m_renderer, nullptr, m_verts.data(), m_verts.size(), m_indices.data(), m_indices.size());
+
+        // for (int i = 0; i < ROWS - 2; i++) {
+        //     for (int j = 0; j < COLUMNS; j++) {
+        //         Color c = m_playfield_matrix[j + i * COLUMNS];
+        //         if (c.a != 0) {
+        //             SDL_SetRenderDrawColor(m_renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
+        //             SDL_FRect r = {j * m_scale + m_board_offset_x, ((ROWS - 1) - i) * m_scale + m_board_offset_y, m_scale, m_scale};
+        //             SDL_RenderFillRect(m_renderer, &r);
+        //         }
+        //     }
+        // }
     }
 
-    void Game::draw_playfield_grid(SDL_Renderer *renderer) {
-        SDL_SetRenderDrawColor(renderer, 22, 22, 22, SDL_ALPHA_OPAQUE);
+    void Game::draw_playfield_grid() {
+        SDL_SetRenderDrawColor(m_renderer, 22, 22, 22, SDL_ALPHA_OPAQUE);
         for (int i = 1; i < COLUMNS; i++) {
-            SDL_RenderLine(renderer,
+            SDL_RenderLine(m_renderer,
                 i * m_scale + m_board_offset_x,
                 ROWS * m_scale + m_board_offset_y,
                 i * m_scale + m_board_offset_x,
@@ -437,7 +530,7 @@ namespace Tetris {
         }
 
         for (int i = 1; i < ROWS - 1; i++) {
-            SDL_RenderLine(renderer,
+            SDL_RenderLine(m_renderer,
                 m_board_offset_x,
                 (ROWS - i) * m_scale + m_board_offset_y,
                 COLUMNS * m_scale + m_board_offset_x,
@@ -445,37 +538,147 @@ namespace Tetris {
             );
         }
 
-        float thick = m_scale < 10 ? 1 : 4;
+        float thick = 4;
+        if (m_scale < 10) {
+            thick = 1;
+        }
         float extra_spacing_top = 1; // [0,1], the smaller, the bigger the extra space
-        SDL_SetRenderDrawColor(renderer, 0x80, 0x80, 0x80, SDL_ALPHA_OPAQUE);
         SDL_FRect vertical1 = {
             m_board_offset_x - thick,
             2 * m_scale + m_board_offset_y,
             thick,
             (ROWS - 1) * m_scale - (extra_spacing_top * m_scale)
         };
-        SDL_RenderFillRect(renderer, &vertical1);
         SDL_FRect vertical2 = {
             COLUMNS * m_scale + m_board_offset_x,
             vertical1.y,
             thick,
             vertical1.h
         };
-        SDL_RenderFillRect(renderer, &vertical2);
         SDL_FRect horizontal1 = {
             m_board_offset_x - thick,
             2 * m_scale - thick + m_board_offset_y,
             COLUMNS * m_scale + thick * 2,
             thick
         };
-        SDL_RenderFillRect(renderer, &horizontal1);
         SDL_FRect horizontal2 = {
             horizontal1.x,
             ((ROWS - 1 + 2) * m_scale + m_board_offset_y) - (extra_spacing_top * m_scale),
             horizontal1.w,
             thick
         };
-        SDL_RenderFillRect(renderer, &horizontal2);
+        SDL_SetRenderDrawColor(m_renderer, 0x80, 0x80, 0x80, SDL_ALPHA_OPAQUE);
+        SDL_RenderFillRect(m_renderer, &vertical1);
+        SDL_RenderFillRect(m_renderer, &vertical2);
+        SDL_RenderFillRect(m_renderer, &horizontal1);
+        SDL_RenderFillRect(m_renderer, &horizontal2);
+    }
+
+    void Game::draw_text_elements() {
+        Text::BitmapFontRenderer::draw_string_line(
+            m_text_font, "HOLD",
+            m_board_offset_x - 4.05 * m_scale,
+            m_board_offset_y + 2.40 * m_scale,
+            m_scale / 11.5f
+        );
+        Text::BitmapFontRenderer::draw_string_line(
+            m_text_font, "NEXT",
+            m_board_offset_x + (COLUMNS + 1.35) * m_scale,
+            m_board_offset_y + 5 * m_scale,
+            m_scale / 11.5f
+        );
+
+        float score_x_offset = m_board_offset_x + (COLUMNS + 1) * m_scale;
+        float score_y_offset = 2;
+        Text::BitmapFontRenderer::draw_string_line(
+            m_text_font, "SCORE",
+            score_x_offset,
+            m_board_offset_y + score_y_offset * m_scale,
+            m_scale / 11.5f
+        );
+        Text::BitmapFontRenderer::draw_int64(
+            m_text_font, m_scoreboard.score,
+            score_x_offset,
+            m_board_offset_y + (score_y_offset + 1) * m_scale,
+            m_scale / 11.5f
+        );
+
+        float level_x_offset = 4.5f;
+        float level_y_offset = 7.2f;
+        Text::BitmapFontRenderer::draw_string_line(
+            m_text_font, "LEVEL",
+            m_board_offset_x - level_x_offset * m_scale,
+            m_board_offset_y + level_y_offset * m_scale,
+            m_scale / 11.5f
+        );
+        Text::BitmapFontRenderer::draw_int64(
+            m_text_font, m_scoreboard.level,
+            m_board_offset_x - level_x_offset * m_scale,
+            m_board_offset_y + (level_y_offset + 1) * m_scale,
+            m_scale / 11.5f
+        );
+    }
+
+    void Game::regen_playfield(void) {
+        // this might be overkill
+        // will regenerate the entire thing on line-clears AND lock down
+        m_verts.clear();
+        m_indices.clear();
+        int v_idx = 0;
+        for (int i = 0; i < (ROWS - 1) * COLUMNS; ++i) {
+            Color c = m_playfield_matrix[i];
+            if (c.a == 0) {
+                continue;
+            }
+            SDL_FRect rect{
+                .x = m_board_offset_x + static_cast<float>(i % COLUMNS) * m_scale,
+                .y = m_board_offset_y + ((ROWS - 1) - (static_cast<float>(i / COLUMNS))) * m_scale,
+                .w = m_scale,
+                .h = m_scale
+            };
+            SDL_FColor color{
+                c.r / 255.f,
+                c.g / 255.f,
+                c.b / 255.f,
+                c.a / 255.f
+            };
+            
+            SDL_Vertex v0 = {
+                { rect.x, rect.y},
+                color,
+                {0, 0}
+            };
+            SDL_Vertex v1 = {
+                { rect.x + rect.w, rect.y},
+                color,
+                {0, 0}
+            };
+            SDL_Vertex v2 = {
+                { rect.x + rect.w, rect.y + rect.h},
+                color,
+                {0, 0}
+            };
+            SDL_Vertex v3 = {
+                { rect.x, rect.y + rect.h},
+                color,
+                {0, 0}
+            };
+        
+            m_verts.emplace_back(v0);
+            m_verts.emplace_back(v1);
+            m_verts.emplace_back(v2);
+            m_verts.emplace_back(v3);
+            
+            m_indices.emplace_back(v_idx + 0);
+            m_indices.emplace_back(v_idx + 1);
+            m_indices.emplace_back(v_idx + 2);
+            
+            m_indices.emplace_back(v_idx + 2);
+            m_indices.emplace_back(v_idx + 3);
+            m_indices.emplace_back(v_idx + 0);
+            
+            v_idx += 4;
+        }
     }
 
     void Game::ScoreSystem::update(int cleared) {
@@ -488,12 +691,8 @@ namespace Tetris {
         lines_cleared += cleared;
         if (level < max_level && lines_cleared >= goal) {
             level  = (level + 1) % max_level;
-            double res = 1;
-            for (int exp = level - 1; exp > 0; --exp) {
-                res *= (0.8 - ((level - 1) * 0.007));
-            }
-            speed = res;
-            goal = level * lines_to_clear_per_level_multiplier;
+            speed = calculate_speed();
+            goal = 10;
             lines_cleared = 0;
         }
     }
@@ -511,7 +710,7 @@ namespace Tetris {
             this->level = level;
             speed = calculate_speed();
         } else {
-            goal = 5;
+            goal = 10;
 
         }
     }

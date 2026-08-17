@@ -1,18 +1,19 @@
 #pragma once
 
-#include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <memory>
+#include <typeindex>
+
+#include "events.hpp"
 
 namespace TEngine::StateMachine {
-    // State base class to be used for classes that will be used in GenericStateMachine
-    class State {
+    // State base class to be used for classes (states) that may be used by a StateMachine
+    class State : public Events::EventListener {
     public:
         virtual void enter(void) {}
         // the double argument is for the delta_time
         virtual void update(double) {}
-        virtual void handle_input(void) {}
         virtual void draw(void) {}
         virtual void reset(void) {}
         virtual void exit(void) {}
@@ -20,13 +21,18 @@ namespace TEngine::StateMachine {
         virtual ~State() = default;
     };
 
-    // also kinda works as a Layer base class
-    using Layer = State;
+    class StateMachine : public Events::EventListener {
+    public:
+        virtual void update(double delta) = 0;
+        virtual void draw(void) = 0;
+        
+        virtual ~StateMachine() = default;
+    };
 
     // non-virtual destructor.
     // this class will handle the lifetime of the states by itself
-    template<typename Key = std::string, typename __Hash = std::hash<Key>>
-    class GenericStateMachine {
+    template<typename Key = std::type_index, typename __Hash = std::hash<Key>>
+    class GenericStateMachine : public StateMachine {
     public:
         // must call switch_to() before handling anything
         GenericStateMachine() : m_curr(nullptr), m_next{}, m_states{}, m_switching{false} {}
@@ -41,7 +47,7 @@ namespace TEngine::StateMachine {
 
         template<typename T, typename... Args> requires(std::is_base_of_v<State, T>)
         GenericStateMachine& add_state(const Key& id, Args&&... args) {
-            m_states.insert(std::make_pair(id, std::make_unique<T>(std::forward<Args>(args)...)));
+            m_states.emplace(id, std::make_unique<T>(std::forward<Args>(args)...));
             return *this;
         }
         void remove_state(const Key& id) {
@@ -63,9 +69,9 @@ namespace TEngine::StateMachine {
             }
         }
         
-        void update(double delta_t) { update_state(); m_curr->update(delta_t); }
-        void handle_input(void) { m_curr->handle_input(); }
-        void draw(void) {
+        void update(double delta_t) override { update_state(); m_curr->update(delta_t); }
+        void event(Events::IEvent& event) override { m_curr->event(event); }
+        void draw(void) override {
             m_curr->draw();
         }
     private:
@@ -76,17 +82,11 @@ namespace TEngine::StateMachine {
 
         void update_state(void) {
             if (m_switching) {
-                // m_curr->reset();
                 m_curr->exit();
                 m_curr = m_states.at(m_next).get();
                 m_curr->enter();
-                // m_next.clear();
                 m_switching = false;
             }
         }
-    };
-
-    class LayerManager {
-
     };
 }
