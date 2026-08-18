@@ -8,7 +8,7 @@ namespace TetrisUtils {
     // if rot represents an invalid rotation, the returned value will also be invalid
     inline constexpr int rotstr_to_int(std::string_view rot) {
         int fst = 0;
-        int lst = rot.length() > 2 ? rot.length() - 1 : 1;
+        size_t lst = rot.length() > 2 ? rot.length() - 1 : 1;
         int res = 0;
 
         char fst_c = rot[fst], lst_c = rot[lst];

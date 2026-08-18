@@ -169,7 +169,7 @@ namespace Tetris {
 
         draw_held_piece(
             m_held,
-            m_board_offset_x - 4.40 * m_scale,
+            m_board_offset_x - 4.40f * m_scale,
             m_board_offset_y + 2 * m_scale,
             new_scale
         );
@@ -328,8 +328,10 @@ namespace Tetris {
             return false;
         }
         for (Vec2 v : m_current) {
-            m_playfield_matrix[v.x + v.y * COLUMNS] = m_current.get_color();
-            m_line_block_count[v.y] += 1;
+            size_t x = static_cast<size_t>(v.x);
+            size_t y = static_cast<size_t>(v.y);
+            m_playfield_matrix[x + y * COLUMNS] = m_current.get_color();
+            m_line_block_count[y] += 1;
         }
         // TODO - just a warning
         m_ghost = {};
@@ -359,7 +361,9 @@ namespace Tetris {
         bool collides = !check_within_bounds(p);
         for (auto it = p.begin(); it != p.end() && !collides; ++it) {
             Vec2 v = *it;
-            collides = TEngine::Utils::color_to_int32(m_playfield_matrix[v.x + v.y * COLUMNS]) != 0;
+            size_t x = static_cast<size_t>(v.x);
+            size_t y = static_cast<size_t>(v.y);
+            collides = TEngine::Utils::color_to_int32(m_playfield_matrix[x + y * COLUMNS]) != 0;
         }
         return collides;
     }
@@ -455,10 +459,10 @@ namespace Tetris {
             float extra_off_x = 2;
             float extra_off_y = 3;
             if (type == Tetrimino::Type::I) {
-                    extra_off_x = 0.55;
+                    extra_off_x = 0.55f;
                     // extra_off_y = 3;
                 } else if (type == Tetrimino::Type::O) {
-                    extra_off_x = 1.5;
+                    extra_off_x = 1.5f;
 
                 }
             SDL_FRect r{ .x = (x + extra_off_x) * scale + offset_x, .y = offset_y - (y - extra_off_y) * scale, .w = scale, .h = scale };
@@ -504,7 +508,13 @@ namespace Tetris {
 
     // TODO - only redraw what's changed instead of everything... eventually
     void Game::draw_playfield_blocks() {
-        SDL_RenderGeometry(m_renderer, nullptr, m_verts.data(), m_verts.size(), m_indices.data(), m_indices.size());
+        SDL_RenderGeometry(
+            m_renderer,
+            nullptr, m_verts.data(),
+            static_cast<int>(m_verts.size()),
+            m_indices.data(),
+            static_cast<int>(m_indices.size())
+        );
 
         // for (int i = 0; i < ROWS - 2; i++) {
         //     for (int j = 0; j < COLUMNS; j++) {
@@ -577,13 +587,13 @@ namespace Tetris {
     void Game::draw_text_elements() {
         Text::BitmapFontRenderer::draw_string_line(
             m_text_font, "HOLD",
-            m_board_offset_x - 4.05 * m_scale,
-            m_board_offset_y + 2.40 * m_scale,
+            m_board_offset_x - 4.05f * m_scale,
+            m_board_offset_y + 2.40f * m_scale,
             m_scale / 11.5f
         );
         Text::BitmapFontRenderer::draw_string_line(
             m_text_font, "NEXT",
-            m_board_offset_x + (COLUMNS + 1.35) * m_scale,
+            m_board_offset_x + (COLUMNS + 1.35f) * m_scale,
             m_board_offset_y + 5 * m_scale,
             m_scale / 11.5f
         );
@@ -704,10 +714,10 @@ namespace Tetris {
         speed = default_speed;
     }
 
-    void Game::ScoreSystem::set_level(int level) {
-        if (level > 1) {
-            goal = level * lines_to_clear_per_level_multiplier;
-            this->level = level;
+    void Game::ScoreSystem::set_level(int new_level) {
+        if (new_level > 1) {
+            goal = new_level * lines_to_clear_per_level_multiplier;
+            level = new_level;
             speed = calculate_speed();
         } else {
             goal = 10;
@@ -735,8 +745,8 @@ namespace Tetris {
         m_ranges_to_remove.reserve(expected_max_ranges);
         int curr = 0;
         int prev = 0;
-        int rows_to_clean_n = std::count(game_ptr->m_line_block_count.begin(), game_ptr->m_line_block_count.end(), COLUMNS);
-        for (int i = 0; i < ROWS + BUFFER && rows_to_clean_n > 0; ++i) {
+        ptrdiff_t rows_to_clean_n = std::count(game_ptr->m_line_block_count.begin(), game_ptr->m_line_block_count.end(), COLUMNS);
+        for (int i = 0; i < ROWS + BUFFER && static_cast<int>(rows_to_clean_n) > 0; ++i) {
             if (game_ptr->m_line_block_count[i] == 10) {
                 rows_to_clean_n--;
                 game_ptr->m_line_block_count[i] = 0;
@@ -776,11 +786,11 @@ namespace Tetris {
         int count = 0;
         int curr = 0;
         int prev = 0;
-        int rows_to_clean_n = std::count(game_ptr->m_line_block_count.begin(), game_ptr->m_line_block_count.end(), COLUMNS);
+        ptrdiff_t rows_to_clean_n = std::count(game_ptr->m_line_block_count.begin(), game_ptr->m_line_block_count.end(), COLUMNS);
         // calculates which ranges have to be removed. range is [n,m), n = inclusive, m = exclusive
         // this loop also deletes the rows, which prevents implementing animations !!! for now
         // start from the bottom
-        for (int i = 0; i < ROWS + BUFFER && rows_to_clean_n > 0; ++i) {
+        for (int i = 0; i < ROWS + BUFFER && static_cast<int>(rows_to_clean_n) > 0; ++i) {
             if (game_ptr->m_line_block_count[i] == 10) {
                 rows_to_clean_n--;
                 std::fill(

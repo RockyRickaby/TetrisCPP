@@ -18,6 +18,7 @@
 #include "tetris/tetris_input.hpp"
 #include "tetris/tetris_state_machines/tetris_game_sm.hpp"
 #include "engine/tengine.hpp"
+#include "engine/sprites/sprite_renderer.hpp"
 // #include "engine/state_machine.hpp"
 
 using TetrisBag = Tetris::Bag::Standard;
@@ -41,6 +42,7 @@ struct AppState {
 };
 
 TEngine::Text::BitmapText joust_tmp;
+std::unique_ptr<TEngine::Sprites::SpriteAtlas> joust_sprites;
 
 class Whatever : public TEngine::Events::ICustomEvent {
 public:
@@ -113,7 +115,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     // std::cout << std::filesystem::current_path() << std::endl;
     joust_tmp = Text::BitmapFontRenderer::make_bitmap_text_num(state->font.get(), 0);
-
+    joust_sprites = std::make_unique<TEngine::Sprites::SpriteAtlas>("assets/fonts/JoustFontAtlas.png", 8, 8, state->renderer, SDL_SCALEMODE_NEAREST);
+    joust_sprites->insert_offsets(1, 16, 4);
     *appstate = state;
 
     return SDL_APP_CONTINUE;  /* carry on with the program! */
@@ -179,6 +182,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     // Text::draw_bitmap_text(joust_tmp, corner);
     // BitmapFontRenderer::draw_string(state->font.get(), "HOLD\n  ON", 320, 240, 10);
     // Text::BitmapFontRenderer::render_char(state->font.get(), 'H', 320, 240, 3);
+    Sprites::SpriteRenderer::draw_from_atlas(joust_sprites.get(), 1, 0, 0, 10);
     SDL_RenderPresent(state->renderer);
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }

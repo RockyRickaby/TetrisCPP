@@ -81,7 +81,7 @@ namespace Tetris{
         };
         extern const std::unordered_map<Type, Piece> DEFAULT_PIECES;
 
-        inline int get_amount_of_pieces(void) { return DEFAULT_PIECES.size() - 2; /* two of the pieces are invalid */ }
+        inline int get_amount_of_pieces(void) { return static_cast<int>(DEFAULT_PIECES.size()) - 2; /* two of the pieces are invalid */ }
         // absolutely prevent a copy
         inline const std::unordered_map<Type, Piece>& get_all_pieces() { return DEFAULT_PIECES; } 
         // prevent copy when a reference is all that's needed

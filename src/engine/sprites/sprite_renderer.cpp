@@ -18,6 +18,10 @@ namespace TEngine::Sprites {
     }
 
     void SpriteAtlas::insert_offsets(int sprite_id, int offset_x, int offset_y) {
+        if (m_texture->w < offset_x * m_tile_w || m_texture->h < offset_y * m_tile_h) {
+            //std::clog << "[WARN]: (SpriteAtlas::insert_offsets) " << std::endl;
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "offsets to sprite point to out of bounds area: x = %d, y = %d.", offset_x, offset_y);
+        }
         m_id_to_offsets.insert_or_assign(sprite_id, std::make_pair(offset_x, offset_y));
     }
 
@@ -44,8 +48,8 @@ namespace TEngine::Sprites {
     void SpriteAtlas::render_texture(int sprite_id, float offset_x, float offset_y) {
         auto [x, y] = m_id_to_offsets.at(sprite_id);
         SDL_FRect source = {
-            .x = static_cast<float>(x),
-            .y = static_cast<float>(y),
+            .x = static_cast<float>(x) * m_tile_w,
+            .y = static_cast<float>(y) * m_tile_h,
             .w = static_cast<float>(m_tile_w),
             .h = static_cast<float>(m_tile_h)
         };
@@ -61,22 +65,22 @@ namespace TEngine::Sprites {
     void SpriteAtlas::render(int sprite_id, float offset_x, float offset_y, float scale) {
         auto [x, y] = m_id_to_offsets.at(sprite_id);
         SDL_FRect source = {
-            .x = static_cast<float>(x),
-            .y = static_cast<float>(y),
+            .x = static_cast<float>(x) * m_tile_w,
+            .y = static_cast<float>(y) * m_tile_h,
             .w = static_cast<float>(m_tile_w),
             .h = static_cast<float>(m_tile_h)
         };
         SDL_FRect dest = {
             .x = offset_x,
             .y = offset_y,
-            .w = static_cast<float>(m_tile_w),
-            .h = static_cast<float>(m_tile_h)
+            .w = static_cast<float>(m_tile_w) * scale,
+            .h = static_cast<float>(m_tile_h) * scale
         };
         SDL_RenderTexture(m_renderer, m_texture, &source, &dest);
     }
 
     namespace SpriteRenderer {
-        Sprite make_sprite(SpriteAtlas* atlas, std::int64_t sprite_id) {
+        Sprite make_sprite(SpriteAtlas* atlas, int sprite_id) {
             SDL_Texture* char_texture = SDL_CreateTexture(atlas->get_renderer(), SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, atlas->tile_size(), atlas->tile_size());
             SDL_SetTextureScaleMode(char_texture, SDL_SCALEMODE_NEAREST);
             SDL_SetRenderTarget(atlas->get_renderer(), char_texture);

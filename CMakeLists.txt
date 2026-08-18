@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.0)
 project(TetrisCPP VERSION 0 LANGUAGES CXX)
 
 set(TARGET_MAIN main)
-add_executable(${TARGET_MAIN} WIN32
+set(PROJECT_SOURCES
     src/main.cpp
     src/tetris/tetris_game.cpp
     src/tetris/tetris_menu.cpp
@@ -12,13 +12,23 @@ add_executable(${TARGET_MAIN} WIN32
     src/tetris/tetris_bags.cpp
     src/tetris/tetris_input.cpp
     src/tetris/tetris_state_machines/tetris_game_sm.cpp
-
     src/engine/tengine.cpp
     src/engine/state_machine.cpp
     src/engine/text/text_renderer.cpp
     src/engine/text/fonts.cpp
     src/engine/sprites/sprite_renderer.cpp
 )
+
+# TODO - adjust this
+if (WIN32)
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_executable(${TARGET_MAIN} ${PROJECT_SOURCES})
+    else()
+        add_executable(${TARGET_MAIN} WIN32 ${PROJECT_SOURCES})
+    endif()
+else()
+    add_executable(${TARGET_MAIN} ${PROJECT_SOURCES})
+endif()
     
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")
     set(VENDORED_SDL_EXISTS ON)

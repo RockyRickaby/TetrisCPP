@@ -59,7 +59,7 @@ namespace TEngine::Text {
 
         BitmapText make_bitmap_text_num(BitmapFonts::Font* f, std::int64_t num) {
             std::string num_str = std::to_string(num);
-            std::size_t len = num_str.length(); 
+            int len = static_cast<int>(num_str.length()); 
 
             SDL_Texture* num_texture = SDL_CreateTexture(f->get_renderer(), SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, len * f->tile_size(), f->tile_size());
             SDL_SetTextureScaleMode(num_texture, SDL_SCALEMODE_NEAREST);
