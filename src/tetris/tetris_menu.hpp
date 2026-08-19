@@ -7,7 +7,7 @@
 namespace Tetris {
     class MainMenu : public TEngine::Events::EventListener {
     public:
-        MainMenu(TEngine::Text::BitmapFonts::Font* m_font, SDL_Renderer* renderer);
+        MainMenu(TEngine::Text::BitmapFont* m_font, SDL_Renderer* renderer);
         void update(double delta_t);
         void event(TEngine::Events::IEvent& event) override;
         void draw(void);
@@ -23,8 +23,10 @@ namespace Tetris {
         bool OnMouseDown(TEngine::Events::IEvent& event) override;
 
         SDL_Renderer* m_renderer;
-        TEngine::Text::BitmapFonts::Font* m_font;
+        TEngine::Text::BitmapFont* m_font;
         TEngine::InputHandler m_stateinput_h;
         bool m_wants_switch;
+
+        float m_offset_x = 0;
     };
 }

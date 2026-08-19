@@ -15,6 +15,7 @@ namespace Tetris::States {
         if (tmp_counter <= 0) {
             m_sm_ptr->switch_to(STATE_TETRIS);
         }
+        m_menu->update(delta_t);
     }
 
     void MenuState::event(TEngine::Events::IEvent& event) {
@@ -25,11 +26,13 @@ namespace Tetris::States {
 
 
     void MenuState::draw() {
-        TEngine::Text::BitmapFontRenderer::draw_string_line(m_font, "MAIN MENU", 10, 10, 4);
+        // TEngine::Text::BitmapFontRenderer::draw_string_line(m_font, "MAIN MENU", 10, 10, 4);
+        m_menu->draw();
     }
 
     void MenuState::reset(void) {
         tmp_counter = 0;
+        m_menu->reset();
     }
 
     void MenuState::exit() {
@@ -143,13 +146,14 @@ namespace Tetris::States {
     }
 
     TetrisStateMachine::TetrisStateMachine(
-        Tetris::Game* game_ptr, 
+        Tetris::Game* game_ptr,
+        Tetris::MainMenu* menu_ptr, 
         SDL_Renderer* renderer,
         Tetris::Keybinds* tetris_keys,
-        TEngine::Text::BitmapFonts::Font* font
+        TEngine::Text::BitmapFont* font
     ) :
         m_runstate{this, game_ptr, tetris_keys, renderer},
-        m_menustate{this, tetris_keys, renderer, font},
+        m_menustate{this, menu_ptr, tetris_keys, renderer, font},
         m_gameoverstate(this, renderer, font),
         m_states{ &m_menustate, &m_runstate, &m_gameoverstate },
         m_current{m_states.at(STATE_MAIN_MENU)},

@@ -39,7 +39,7 @@ namespace Tetris {
         static constexpr int BUFFER = 5;
 
         // constructor initializes the game. it will be ready to run
-        Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, TEngine::Text::BitmapFonts::Font* font);
+        Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, TEngine::Text::BitmapFont* font);
 
         template <Bag::TetriminoQueue Q>
         void set_piece_queue() { m_pieces_bag = std::make_unique<Q>(); }
@@ -103,7 +103,7 @@ namespace Tetris {
                 if (m_act == Action::Begin) {
                     reset();
                     get_ranges(game_ptr);
-                    fps.set_countdown_time(0.5/COLUMNS); // TODO - figure out a good timing for this (0.4 or 0.5 or smt)
+                    fps.set_countdown_time(0.5/COLUMNS);
                     m_act = Action::Clearing;
                     return false;
                 } else if (m_act == Action::Clearing) {
@@ -189,7 +189,7 @@ namespace Tetris {
         PieceLockdownTimer m_piece_lock;
         TEngine::Countdown m_piece_drop_timer = TEngine::Countdown{1, true};
         TEngine::Countdown m_piece_spawn = TEngine::Countdown{0, true};
-        TEngine::Text::BitmapFonts::Font* m_text_font;
+        TEngine::Text::BitmapFont* m_text_font;
 
         Tetrimino::Piece m_current{};
         Tetrimino::Piece m_ghost{};

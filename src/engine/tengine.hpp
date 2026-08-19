@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <cstdint>
 #include <iostream>
 #include <SDL3/SDL.h>
@@ -92,7 +93,7 @@ namespace TEngine {
         bool may_press_state(Key &key, KeyboardState kb);
     };
 
-    // already available in SDL as SDL_Color
+    // NOTE: already available in SDL as SDL_Color
     struct Color {
         std::uint8_t r = 0;
         std::uint8_t g = 0;

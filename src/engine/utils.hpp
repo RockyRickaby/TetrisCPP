@@ -4,7 +4,7 @@
 #include <string_view>
 #include "tengine.hpp"
 
-namespace TEngine::Utils {
+namespace TEngine::TUtils {
     // uppercase letters stay uppercased
     // written for that compile-time evaluation
     // anything else that is not a letter may or may not change to something else completely unrelated
@@ -18,7 +18,7 @@ namespace TEngine::Utils {
     // returns the base 10 value correspondent to a single hex digit
     // assumes that h is within the ranges [0-9], [a-f] or [A-F]
     // results not defined otherwise
-    inline constexpr std::uint8_t char_to_int(char h) {
+    inline constexpr std::uint8_t hex_char_to_int(char h) {
         return h >= '0' && h <= '9' ? h - '0' : to_uppercase(static_cast<unsigned char>(h)) - 'A' + 10;
     }
 
@@ -44,9 +44,9 @@ namespace TEngine::Utils {
             hex = hex.substr(1);
         }
         return Color{
-            .r = static_cast<std::uint8_t>(char_to_int(hex[0]) * 16 + char_to_int(hex[1])),
-            .g = static_cast<std::uint8_t>(char_to_int(hex[2]) * 16 + char_to_int(hex[3])),
-            .b = static_cast<std::uint8_t>(char_to_int(hex[4]) * 16 + char_to_int(hex[5])),
+            .r = static_cast<std::uint8_t>(hex_char_to_int(hex[0]) * 16 + hex_char_to_int(hex[1])),
+            .g = static_cast<std::uint8_t>(hex_char_to_int(hex[2]) * 16 + hex_char_to_int(hex[3])),
+            .b = static_cast<std::uint8_t>(hex_char_to_int(hex[4]) * 16 + hex_char_to_int(hex[5])),
             .a = alpha
         };
     }

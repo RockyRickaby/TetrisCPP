@@ -173,7 +173,7 @@ namespace Tetris{
                 horizontal1.w,
                 thick
             };
-            TEngine::Color c = TEngine::Utils::color_from_hex("#808080");
+            TEngine::Color c = TEngine::TUtils::color_from_hex("#808080");
             SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
             SDL_RenderFillRect(renderer, &vertical1);
             SDL_RenderFillRect(renderer, &vertical2);

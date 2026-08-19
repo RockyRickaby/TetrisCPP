@@ -16,7 +16,7 @@ set(PROJECT_SOURCES
     src/engine/state_machine.cpp
     src/engine/text/text_renderer.cpp
     src/engine/text/fonts.cpp
-    src/engine/sprites/sprite_renderer.cpp
+    src/engine/sprites/sprites.cpp
 )
 
 # TODO - adjust this

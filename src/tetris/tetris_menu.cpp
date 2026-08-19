@@ -5,14 +5,14 @@
 #include "../engine/text/text_renderer.hpp"
 
 namespace Tetris {
-    MainMenu::MainMenu(TEngine::Text::BitmapFonts::Font* font, SDL_Renderer* renderer) :
+    MainMenu::MainMenu(TEngine::Text::BitmapFont* font, SDL_Renderer* renderer) :
         m_renderer{renderer},
         m_font{font},
         m_wants_switch{false}
     {}
     
     void MainMenu::update(double delta_t) {
-
+        m_offset_x += 30 * delta_t;
     }
 
     void MainMenu::event(TEngine::Events::IEvent& event) {
@@ -24,10 +24,11 @@ namespace Tetris {
 
     void MainMenu::draw(void) {
         // TODO - implement drawing logic
-        SDL_SetRenderDrawColor(m_renderer, 100, 0, 0, SDL_ALPHA_OPAQUE);
+        SDL_SetRenderDrawColor(m_renderer, 100, 0, 10, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(m_renderer);
         using namespace TEngine::Text;
-        BitmapFontRenderer::draw_string_line(m_font, "T E T R I S", 20, 20, 3);
+        BitmapFontRenderer::draw_string_line(m_font, "MAIN MENU", 20 + m_offset_x, 20, 3);
+
     }
 
     bool MainMenu::wants_switch_state(void) {
@@ -35,6 +36,7 @@ namespace Tetris {
     }
     
     void MainMenu::reset(void) {
+        m_offset_x = 0;
         m_wants_switch = false;
     }
 

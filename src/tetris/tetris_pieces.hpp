@@ -72,6 +72,7 @@ namespace Tetris{
                 TEngine::Vec2 operator*() { TEngine::Vec2 r = *m_block_it; r += m_it_pos; return r; }
 
                 // iterator traits
+                // I don't know how these work, but I'm sure some of these are definitely wrong
                 using difference_type = std::ptrdiff_t;
                 using value_type = std::vector<TEngine::Vec2>::const_iterator;
                 using pointer = const std::vector<TEngine::Vec2>::const_iterator*;

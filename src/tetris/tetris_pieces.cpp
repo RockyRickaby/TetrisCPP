@@ -117,13 +117,13 @@ namespace Tetris {
         // const std::map<Type, Piece> DEFAULT_PIECES = {
             {Type::None, {}},
             {Type::Custom, {}},
-            {Type::I, Piece{Type::I, {TEngine::Utils::color_from_hex("#00E6FE")}, {3, 20}, {1.5, -0.5}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,0}, TEngine::Vec2{2,0}, TEngine::Vec2{3,0} }}}, 
-            {Type::J, Piece{Type::J, {TEngine::Utils::color_from_hex("#1801FF")}, {4, 20}, {0, 0}, { TEngine::Vec2{-1,1}, TEngine::Vec2{-1,0}, TEngine::Vec2{0,0}, TEngine::Vec2{1,0} }}}, 
-            {Type::L, Piece{Type::L, {TEngine::Utils::color_from_hex("#FF7308")}, {4, 20}, {0, 0}, { TEngine::Vec2{1,0}, TEngine::Vec2{0,0}, TEngine::Vec2{-1,0}, TEngine::Vec2{1,1} }}},
-            {Type::O, Piece{Type::O, {TEngine::Utils::color_from_hex("#FFDE00")}, {4, 20}, {0.5, 0.5}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,1}, TEngine::Vec2{1,0}, TEngine::Vec2{0,1} }}}, 
-            {Type::S, Piece{Type::S, {TEngine::Utils::color_from_hex("#66FD00")}, {4, 20}, {0, 0}, { TEngine::Vec2{0,0}, TEngine::Vec2{-1,0}, TEngine::Vec2{0,1}, TEngine::Vec2{1,1} }}},
-            {Type::Z, Piece{Type::Z, {TEngine::Utils::color_from_hex("#FE103C")}, {4, 20}, {0, 0}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,0}, TEngine::Vec2{0,1}, TEngine::Vec2{-1,1} }}},
-            {Type::T, Piece{Type::T, {TEngine::Utils::color_from_hex("#B802FD")}, {4, 20}, {0, 0}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,0}, TEngine::Vec2{-1,0}, TEngine::Vec2{0,1} }}}
+            {Type::I, Piece{Type::I, {TEngine::TUtils::color_from_hex("#00E6FE")}, {3, 20}, {1.5, -0.5}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,0}, TEngine::Vec2{2,0}, TEngine::Vec2{3,0} }}}, 
+            {Type::J, Piece{Type::J, {TEngine::TUtils::color_from_hex("#1801FF")}, {4, 20}, {0, 0}, { TEngine::Vec2{-1,1}, TEngine::Vec2{-1,0}, TEngine::Vec2{0,0}, TEngine::Vec2{1,0} }}}, 
+            {Type::L, Piece{Type::L, {TEngine::TUtils::color_from_hex("#FF7308")}, {4, 20}, {0, 0}, { TEngine::Vec2{1,0}, TEngine::Vec2{0,0}, TEngine::Vec2{-1,0}, TEngine::Vec2{1,1} }}},
+            {Type::O, Piece{Type::O, {TEngine::TUtils::color_from_hex("#FFDE00")}, {4, 20}, {0.5, 0.5}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,1}, TEngine::Vec2{1,0}, TEngine::Vec2{0,1} }}}, 
+            {Type::S, Piece{Type::S, {TEngine::TUtils::color_from_hex("#66FD00")}, {4, 20}, {0, 0}, { TEngine::Vec2{0,0}, TEngine::Vec2{-1,0}, TEngine::Vec2{0,1}, TEngine::Vec2{1,1} }}},
+            {Type::Z, Piece{Type::Z, {TEngine::TUtils::color_from_hex("#FE103C")}, {4, 20}, {0, 0}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,0}, TEngine::Vec2{0,1}, TEngine::Vec2{-1,1} }}},
+            {Type::T, Piece{Type::T, {TEngine::TUtils::color_from_hex("#B802FD")}, {4, 20}, {0, 0}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,0}, TEngine::Vec2{-1,0}, TEngine::Vec2{0,1} }}}
         };
     }
 }

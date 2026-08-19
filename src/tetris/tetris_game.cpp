@@ -11,7 +11,7 @@ using namespace TEngine; // Vec2, Color, Text
 
 // TODO - add some nicer texture to the blocks
 namespace Tetris {
-    Game::Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, Text::BitmapFonts::Font* font) :
+    Game::Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, Text::BitmapFont* font) :
         m_renderer{renderer},
         m_scale{block_scale},
         m_board_offset_x{(screen_width - COLUMNS * block_scale) / 2.0f},
@@ -175,7 +175,7 @@ namespace Tetris {
         );
         m_pieces_bag->draw(
             m_renderer,
-            m_board_offset_x + (COLUMNS + 1) * m_scale,
+            m_board_offset_x + (COLUMNS + 1.07f) * m_scale,
             m_board_offset_y + 6 * m_scale,
             new_scale
         );
@@ -248,8 +248,6 @@ namespace Tetris {
         // undo test move
         m_current.move(Vec2{0,1});
         // NOTE - issues with this part may be caused by the input handling that happens outside of this class
-        // TODO - lockdown is still not quite correct. it should only be reset on moved_down if the y-value is lower
-        // than the one of the surface that was last hit
         if (is_downwards_obstructed) {
             m_piece_lock.prev_y = m_current.get_position().y + m_current.get_min().y;
             // to have infinite placement lock down, just remove the lock.moves check
@@ -363,7 +361,7 @@ namespace Tetris {
             Vec2 v = *it;
             size_t x = static_cast<size_t>(v.x);
             size_t y = static_cast<size_t>(v.y);
-            collides = TEngine::Utils::color_to_int32(m_playfield_matrix[x + y * COLUMNS]) != 0;
+            collides = TEngine::TUtils::color_to_int32(m_playfield_matrix[x + y * COLUMNS]) != 0;
         }
         return collides;
     }
@@ -437,13 +435,16 @@ namespace Tetris {
         SDL_GetRenderDrawBlendMode(m_renderer, &mode);
         SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(m_renderer, c.r, c.g, c.b, alpha);
+        std::array<SDL_FRect, 4> rects{};
+        int rects_i = 0;
         for (auto [x, y] : p) {
-            SDL_FRect r{ .x = x * m_scale + m_board_offset_x, .y = ((ROWS - 1) - y) * m_scale + m_board_offset_y, .w = m_scale, .h = m_scale };
-            if (fill) {
-                SDL_RenderFillRect(m_renderer, &r);
-            } else {
-                SDL_RenderRect(m_renderer, &r);
-            }
+            rects[rects_i] = { .x = x * m_scale + m_board_offset_x, .y = ((ROWS - 1) - y) * m_scale + m_board_offset_y, .w = m_scale, .h = m_scale };
+            rects_i++;
+        }
+        if (fill) {
+            SDL_RenderFillRects(m_renderer, rects.data(), rects_i);
+        } else {
+            SDL_RenderRects(m_renderer, rects.data(), rects_i);
         }
         SDL_SetRenderDrawBlendMode(m_renderer, mode);
     };
@@ -454,59 +455,59 @@ namespace Tetris {
         SDL_GetRenderDrawBlendMode(m_renderer, &mode);
         SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(m_renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
-        const auto type = p.get_type();
-        for (auto [x, y] : p.get_blocks()) {
-            float extra_off_x = 2;
-            float extra_off_y = 3;
-            if (type == Tetrimino::Type::I) {
-                    extra_off_x = 0.55f;
-                    // extra_off_y = 3;
-                } else if (type == Tetrimino::Type::O) {
-                    extra_off_x = 1.5f;
 
-                }
-            SDL_FRect r{ .x = (x + extra_off_x) * scale + offset_x, .y = offset_y - (y - extra_off_y) * scale, .w = scale, .h = scale };
-            SDL_RenderFillRect(m_renderer, &r);
+        std::array<SDL_FRect, 4> rects;
+        int rects_i = 0;
+        float extra_off_x = 2;
+        float extra_off_y = 3;
+        const auto type = p.get_type();
+        if (type == Tetrimino::Type::I) {
+            extra_off_x = 0.55f;
+            // extra_off_y = 3;
+        } else if (type == Tetrimino::Type::O) {
+            extra_off_x = 1.5f;
         }
+        for (auto [x, y] : p.get_blocks()) {
+            rects[rects_i] = { .x = (x + extra_off_x) * scale + offset_x, .y = offset_y - (y - extra_off_y) * scale, .w = scale, .h = scale };
+            rects_i++;
+        }
+        SDL_RenderFillRects(m_renderer, rects.data(), rects_i);
         SDL_SetRenderDrawBlendMode(m_renderer, mode);
         
         float thick = 4;
         if (m_scale < 10) {
             thick = 1;
         }
-        SDL_FRect vertical1 = {
+
+        rects[0] = {
             offset_x - thick,
             offset_y - thick,
             thick,
             5 * scale + thick * 2
         };
-        SDL_FRect vertical2 = {
+        rects[1] = {
             offset_x + 5 * scale,
-            vertical1.y,
+            rects[0].y,
             thick,
-            vertical1.h
+            rects[0].h
         };
-        SDL_FRect horizontal1 = {
+        rects[2] = {
             offset_x,
             offset_y - thick,
             5 * scale,
             thick
         };
-        SDL_FRect horizontal2 = {
-            horizontal1.x,
+        rects[3] = {
+            rects[2].x,
             offset_y + 5 * scale,
-            horizontal1.w,
+            rects[2].w,
             thick
         };
-        Color border_color = TEngine::Utils::color_from_hex("#808080");
+        Color border_color = TEngine::TUtils::color_from_hex("#808080");
         SDL_SetRenderDrawColor(m_renderer, border_color.r, border_color.g, border_color.b, SDL_ALPHA_OPAQUE);
-        SDL_RenderFillRect(m_renderer, &vertical1);
-        SDL_RenderFillRect(m_renderer, &vertical2);
-        SDL_RenderFillRect(m_renderer, &horizontal2);
-        SDL_RenderFillRect(m_renderer, &horizontal1);
+        SDL_RenderFillRects(m_renderer, rects.data(), 4);
     }
 
-    // TODO - only redraw what's changed instead of everything... eventually
     void Game::draw_playfield_blocks() {
         SDL_RenderGeometry(
             m_renderer,
@@ -553,48 +554,46 @@ namespace Tetris {
             thick = 1;
         }
         float extra_spacing_top = 1; // [0,1], the smaller, the bigger the extra space
-        SDL_FRect vertical1 = {
+        std::array<SDL_FRect, 4> rects;
+        rects[0] = {
             m_board_offset_x - thick,
             2 * m_scale + m_board_offset_y,
             thick,
             (ROWS - 1) * m_scale - (extra_spacing_top * m_scale)
         };
-        SDL_FRect vertical2 = {
+        rects[1] = {
             COLUMNS * m_scale + m_board_offset_x,
-            vertical1.y,
+            rects[0].y,
             thick,
-            vertical1.h
+            rects[0].h
         };
-        SDL_FRect horizontal1 = {
+        rects[2] = {
             m_board_offset_x - thick,
             2 * m_scale - thick + m_board_offset_y,
             COLUMNS * m_scale + thick * 2,
             thick
         };
-        SDL_FRect horizontal2 = {
-            horizontal1.x,
+        rects[3] = {
+            rects[2].x,
             ((ROWS - 1 + 2) * m_scale + m_board_offset_y) - (extra_spacing_top * m_scale),
-            horizontal1.w,
+            rects[2].w,
             thick
         };
         SDL_SetRenderDrawColor(m_renderer, 0x80, 0x80, 0x80, SDL_ALPHA_OPAQUE);
-        SDL_RenderFillRect(m_renderer, &vertical1);
-        SDL_RenderFillRect(m_renderer, &vertical2);
-        SDL_RenderFillRect(m_renderer, &horizontal1);
-        SDL_RenderFillRect(m_renderer, &horizontal2);
+        SDL_RenderFillRects(m_renderer, rects.data(), 4);
     }
 
     void Game::draw_text_elements() {
         Text::BitmapFontRenderer::draw_string_line(
             m_text_font, "HOLD",
-            m_board_offset_x - 4.05f * m_scale,
+            m_board_offset_x - 4.10f * m_scale,
             m_board_offset_y + 2.40f * m_scale,
             m_scale / 11.5f
         );
         Text::BitmapFontRenderer::draw_string_line(
             m_text_font, "NEXT",
-            m_board_offset_x + (COLUMNS + 1.35f) * m_scale,
-            m_board_offset_y + 5 * m_scale,
+            m_board_offset_x + (COLUMNS + 1.4f) * m_scale,
+            m_board_offset_y + 4.785f * m_scale,
             m_scale / 11.5f
         );
 
@@ -628,7 +627,7 @@ namespace Tetris {
             m_scale / 11.5f
         );
     }
-
+    
     void Game::regen_playfield(void) {
         // this might be overkill
         // will regenerate the entire thing on line-clears AND lock down

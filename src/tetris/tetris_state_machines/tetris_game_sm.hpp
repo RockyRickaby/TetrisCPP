@@ -8,6 +8,7 @@
 #include "../../engine/text/fonts.hpp"
 #include "../tetris_game.hpp"
 #include "../tetris_input.hpp"
+#include "../tetris_menu.hpp"
 
 namespace Tetris::States {
     inline static const int STATE_MAIN_MENU = 0;
@@ -19,8 +20,9 @@ namespace Tetris::States {
     // TODO - accept Tetris::Menu instance!!!!
     class MenuState final : public TEngine::StateMachine::State {
     public:
-        MenuState(TetrisStateMachine *sm, Tetris::Keybinds* tetris_keys, SDL_Renderer *renderer, TEngine::Text::BitmapFonts::Font* font) :
+        MenuState(TetrisStateMachine *sm, MainMenu* menu, Tetris::Keybinds* tetris_keys, SDL_Renderer *renderer, TEngine::Text::BitmapFont* font) :
             m_sm_ptr{sm},
+            m_menu{menu},
             m_tetris_keys(tetris_keys),
             m_font{font},
             m_renderer{renderer}
@@ -36,15 +38,16 @@ namespace Tetris::States {
     private:
         bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event) override;
         TetrisStateMachine *m_sm_ptr;
+        MainMenu* m_menu;
         Tetris::Keybinds *m_tetris_keys;
-        TEngine::Text::BitmapFonts::Font* m_font;
+        TEngine::Text::BitmapFont* m_font;
         SDL_Renderer *m_renderer;
         double tmp_counter = 5;
     };
 
     class RunGameState final : public TEngine::StateMachine::State {
     public:
-        RunGameState(TetrisStateMachine *sm, Game *game, Tetris::Keybinds* tetris_keys, SDL_Renderer *renderer) :
+        RunGameState(TetrisStateMachine* sm, Game* game, Tetris::Keybinds* tetris_keys, SDL_Renderer* renderer) :
             m_game_ptr{game},
             m_parent_sm(sm),
             m_keyboard_state{},
@@ -72,7 +75,7 @@ namespace Tetris::States {
 
     class GameOverState final : public TEngine::StateMachine::State {
     public:
-        GameOverState(TetrisStateMachine *sm, SDL_Renderer *renderer, TEngine::Text::BitmapFonts::Font* font) :
+        GameOverState(TetrisStateMachine *sm, SDL_Renderer *renderer, TEngine::Text::BitmapFont* font) :
             m_sm_ptr{sm},
             // m_input_event_handler(input_event_h),
             m_font{font},
@@ -87,7 +90,7 @@ namespace Tetris::States {
         void exit(void) override;
     private:
         TetrisStateMachine *m_sm_ptr;
-        TEngine::Text::BitmapFonts::Font* m_font;
+        TEngine::Text::BitmapFont* m_font;
         SDL_Renderer *m_renderer;
         double tmp_counter = 5;
     };
@@ -96,10 +99,11 @@ namespace Tetris::States {
     class TetrisStateMachine : public TEngine::StateMachine::StateMachine {
     public:
         TetrisStateMachine(
-            Tetris::Game* game_ptr, 
+            Tetris::Game* game_ptr,
+            Tetris::MainMenu* menu_ptr,
             SDL_Renderer* renderer,
             Tetris::Keybinds* tetris_keys,
-            TEngine::Text::BitmapFonts::Font* font
+            TEngine::Text::BitmapFont* font
         );
         void update(double delta_t) override;
         // void handle_input(void) override { m_current->handle_input(); }

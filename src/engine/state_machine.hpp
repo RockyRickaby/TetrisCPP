@@ -7,6 +7,7 @@
 
 #include "events.hpp"
 
+// TODO - reduce indirection a little
 namespace TEngine::StateMachine {
     // State base class to be used for classes (states) that may be used by a StateMachine
     class State : public Events::EventListener {
