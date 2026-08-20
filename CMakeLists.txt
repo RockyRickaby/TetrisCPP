@@ -18,22 +18,20 @@ set(PROJECT_SOURCES
     src/engine/text/fonts.cpp
     src/engine/sprites/sprites.cpp
 )
+# Manually set the path to the SDL3 library on Windows systems
+set(WIN_SDL3_PATH "C:\\SDL3")
 
-# TODO - adjust this
-if (WIN32)
-    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-        add_executable(${TARGET_MAIN} ${PROJECT_SOURCES})
-    else()
-        add_executable(${TARGET_MAIN} WIN32 ${PROJECT_SOURCES})
-    endif()
+if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT WIN32)
+    add_executable(${TARGET_MAIN})
 else()
-    add_executable(${TARGET_MAIN} ${PROJECT_SOURCES})
+    add_executable(${TARGET_MAIN} WIN32)
 endif()
+target_sources(${TARGET_MAIN} PRIVATE ${PROJECT_SOURCES})
     
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")
     set(VENDORED_SDL_EXISTS ON)
 else()
-    message(WARNING "SDL submodule NOT found")
+    message(STATUS "SDL submodule NOT found. Assuming a package is available")
     set(VENDORED_SDL_EXISTS OFF)
 endif()
 # use vendored version by default if it exists unless defined otherwise. avoid problems if the package isn't available
@@ -42,21 +40,23 @@ option(VENDORED_SDL "Use vendored SDL library" ${VENDORED_SDL_EXISTS})
 if(VENDORED_SDL)
     message(STATUS "Using vendored SDL")
     if(NOT VENDORED_SDL_EXISTS)
-        # find_package(Git REQUIRED)
+        # git submodule update --init --recursive
         message(FATAL_ERROR "Vendored SDL not found. Grab a copy of the source code and save it to vendored/SDL or fetch the submodule via Git (run 'git submodule update --init --recursive')")
-        # message(STATUS "Vendored SDL not found. Fetching submodule via Git")
-        # execute_process(
-        #     COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
-        #     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        #     RESULT_VARIABLE GIT_SUBMODULE_RESULT
-        # )
     endif()
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
     add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
 else()
     message(STATUS "Using packaged SDL")
-    find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
+    # TODO - TEST THIS LATER
+    if (WIN32)
+        list(APPEND CMAKE_PREFIX_PATH ${WIN_SDL3_PATH})
+        find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
+        # target_include_directories(${TARGET_MAIN} PRIVATE ${WIN_SDL3_PATH}/include)
+        # target_include_directories(${TARGET_MAIN} PRIVATE ${WIN_SDL3_PATH}/lib)
+    else()
+        find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
+    endif()
 endif()
 
 set_target_properties(${TARGET_MAIN} PROPERTIES
@@ -71,6 +71,7 @@ target_compile_options(${TARGET_MAIN} PRIVATE
     >
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
+
 # target_compile_features(${TARGET_MAIN} PUBLIC ${needed_features})
 target_link_libraries(${TARGET_MAIN} PRIVATE SDL3::SDL3)
 
