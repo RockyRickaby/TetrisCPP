@@ -39,10 +39,10 @@ namespace Tetris {
         static constexpr int BUFFER = 5;
 
         // constructor initializes the game. it will be ready to run
-        Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, TEngine::Text::BitmapFont* font);
+        Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, TEngine::Text::BitmapFont* font, SDL_Texture* mino_texture);
 
         template <Bag::TetriminoQueue Q>
-        void set_piece_queue() { m_pieces_bag = std::make_unique<Q>(); }
+        void set_piece_queue() { m_pieces_bag = std::make_unique<Q>(m_renderer, m_mino_texture, m_queue_offset_x, m_queue_offset_y, m_scale / 1.5f); }
 
         void restart(void);
         bool update(double delta_t);
@@ -172,6 +172,9 @@ namespace Tetris {
         float m_board_offset_x = ((32 - COLUMNS) / 2.0f) * m_scale;
         float m_board_offset_y = 1 * m_scale;
 
+        float m_queue_offset_x = m_board_offset_x + (COLUMNS + 1.07f) * m_scale;
+        float m_queue_offset_y = m_board_offset_y + 6 * m_scale;
+
         std::array<TEngine::Color, (ROWS + BUFFER) * COLUMNS> m_playfield_matrix = {};
         std::array<std::uint8_t, ROWS + BUFFER> m_line_block_count = {};
         
@@ -190,6 +193,8 @@ namespace Tetris {
         TEngine::Countdown m_piece_drop_timer = TEngine::Countdown{1, true};
         TEngine::Countdown m_piece_spawn = TEngine::Countdown{0, true};
         TEngine::Text::BitmapFont* m_text_font;
+        // two pointer indirections happening here.
+        SDL_Texture* m_mino_texture;
 
         Tetrimino::Piece m_current{};
         Tetrimino::Piece m_ghost{};

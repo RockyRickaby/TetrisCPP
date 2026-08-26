@@ -82,15 +82,16 @@ namespace Tetris{
         };
         extern const std::unordered_map<Type, Piece> DEFAULT_PIECES;
 
-        inline int get_amount_of_pieces(void) { return static_cast<int>(DEFAULT_PIECES.size()) - 2; /* two of the pieces are invalid */ }
+        inline int min_type_as_int() { return static_cast<int>(Type::None) + 1; }
+        inline int max_type_as_int() { return static_cast<int>(Type::Custom) - 1; }
+        inline int get_amount_of_pieces(void) { return static_cast<int>(DEFAULT_PIECES.size()); /* two of the pieces are invalid */ }
         // absolutely prevent a copy
         inline const std::unordered_map<Type, Piece>& get_all_pieces() { return DEFAULT_PIECES; } 
         // prevent copy when a reference is all that's needed
         inline const Piece& get_piece(Type type) {
-            if (type == Type::None) {
-                // return Piece{};
-            } else if (type == Type::Custom) {
-                // return Piece{};
+            if (type == Type::None || type == Type::Custom) {
+                static Piece __empty = {};
+                return __empty;
             }
             return DEFAULT_PIECES.at(type);
         }

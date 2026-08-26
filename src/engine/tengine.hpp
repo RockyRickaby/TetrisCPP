@@ -1,6 +1,6 @@
 #pragma once
 
-#include <memory>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <SDL3/SDL.h>
@@ -94,6 +94,7 @@ namespace TEngine {
     };
 
     // NOTE: already available in SDL as SDL_Color
+    // Components are unsigned 8 bit integers (very lightweight!!)
     struct Color {
         std::uint8_t r = 0;
         std::uint8_t g = 0;
@@ -105,10 +106,43 @@ namespace TEngine {
 
         friend std::ostream& operator<<(std::ostream& output, const Color& v);
     };
+
+    // Takes up 16 bytes (darn...).
+    // includes some methods for incrementing each member.
+    // this is a struct, so the values may be modified wherever, whenever, however desired
+    // (even if it means breaking the format)
+    struct ColorHSB {
+        float hue = 0; // [0, 360)
+        float sat = 0; // [0, 1]
+        float bri = 0; // [0, 1]
+        float alpha = 0; // [0, 1]
+
+        void increment_hue(float hue_inc);
+        void increment_sat(float sat_inc);
+        void increment_bri(float bri_inc);
+        void increment_alpha(float alpha_inc);
+        bool operator==(const ColorHSB& other) const;
+        bool operator!=(const ColorHSB& other) const;
+
+        friend std::ostream& operator<<(std::ostream& output, const ColorHSB& v);
+    };
+
+    using ColorHSV = ColorHSB;
  
     struct Vec2 {
         float x = 0;
         float y = 0;
+
+        Vec2& normalize() {
+            float len = length();
+            x /= len;
+            y /= len;
+            return *this;
+        }
+
+        float length() { return std::sqrtf(x * x + y * y); }
+        float dot(const Vec2 other) { return (x * other.x) + (y * other.y); }
+        float cross2D(const Vec2 other) { return (x * other.y) - (y * other.x); }
 
         Vec2 operator+(const Vec2 other) const;
         Vec2 operator-(const Vec2 other) const;
@@ -126,6 +160,29 @@ namespace TEngine {
         float x = 0;
         float y = 0;
         float z = 0;
+
+        Vec3& normalize() {
+            float len = length();
+            x /= len;
+            y /= len;
+            z /= len;
+            return *this;
+        }
+
+        float length() { return std::sqrtf(x * x + y * y + z * z); }
+        float dot(const Vec3& other) {
+            return
+                (x * other.x) +
+                (y * other.y) +
+                (z * other.z);
+        }
+        Vec3 cross(const Vec3& other) {
+            return {
+                (y * other.z) - (z * other.y),
+                (z * other.x) - (x * other.z),
+                (x * other.y) - (y * other.x)
+            };
+        }
 
         Vec3 operator+(const Vec3 other) const;
         Vec3 operator-(const Vec3 other) const;

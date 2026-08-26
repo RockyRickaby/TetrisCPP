@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-project(TetrisCPP VERSION 0 LANGUAGES CXX)
+project(TetrisCPP VERSION 0 LANGUAGES CXX C) # CXX is this project, C is SDL3
 
 set(TARGET_MAIN main)
 set(PROJECT_SOURCES
@@ -13,13 +13,15 @@ set(PROJECT_SOURCES
     src/tetris/tetris_input.cpp
     src/tetris/tetris_state_machines/tetris_game_sm.cpp
     src/engine/tengine.cpp
+    src/engine/texture.cpp
+    src/engine/silly3D/silly_3D.cpp
     src/engine/state_machine.cpp
     src/engine/text/text_renderer.cpp
     src/engine/text/fonts.cpp
     src/engine/sprites/sprites.cpp
 )
-# Manually set the path to the SDL3 library on Windows systems
-set(WIN_SDL3_PATH "C:\\SDL3")
+# Manually set one possible path to the SDL3 library on Windows systems
+set(WIN_SDL3_CPATH "C:/SDL3")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT WIN32)
     add_executable(${TARGET_MAIN})
@@ -27,11 +29,11 @@ else()
     add_executable(${TARGET_MAIN} WIN32)
 endif()
 target_sources(${TARGET_MAIN} PRIVATE ${PROJECT_SOURCES})
-    
+
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")
     set(VENDORED_SDL_EXISTS ON)
 else()
-    message(STATUS "SDL submodule NOT found. Assuming a package is available")
+    message(STATUS "SDL submodule NOT found.")
     set(VENDORED_SDL_EXISTS OFF)
 endif()
 # use vendored version by default if it exists unless defined otherwise. avoid problems if the package isn't available
@@ -39,6 +41,8 @@ option(VENDORED_SDL "Use vendored SDL library" ${VENDORED_SDL_EXISTS})
 
 if(VENDORED_SDL)
     message(STATUS "Using vendored SDL")
+    # TODO - try finding config files in vendored folder as well eventually
+    # list(APPEND CMAKE_PREFIX_PATH "vendored/SDL")
     if(NOT VENDORED_SDL_EXISTS)
         # git submodule update --init --recursive
         message(FATAL_ERROR "Vendored SDL not found. Grab a copy of the source code and save it to vendored/SDL or fetch the submodule via Git (run 'git submodule update --init --recursive')")
@@ -48,23 +52,21 @@ if(VENDORED_SDL)
     add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
 else()
     message(STATUS "Using packaged SDL")
-    # TODO - TEST THIS LATER
     if (WIN32)
-        list(APPEND CMAKE_PREFIX_PATH ${WIN_SDL3_PATH})
-        find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
-        # target_include_directories(${TARGET_MAIN} PRIVATE ${WIN_SDL3_PATH}/include)
-        # target_include_directories(${TARGET_MAIN} PRIVATE ${WIN_SDL3_PATH}/lib)
-    else()
-        find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
+        list(APPEND CMAKE_PREFIX_PATH ${WIN_SDL3_CPATH})
+        # find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
     endif()
+    find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
 endif()
 
 set_target_properties(${TARGET_MAIN} PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
     # OUTPUT_NAME "TPP"
 )
 
+# TODO - this could be simplified with a simple if-else. would make this easier to read
 target_compile_options(${TARGET_MAIN} PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
         -Wall -Wextra -Wpedantic -fdiagnostics-color=always

@@ -1,3 +1,4 @@
+#include <SDL3/SDL_blendmode.h>
 #include <SDL3/SDL_render.h>
 #include <memory>
 #include <algorithm>
@@ -9,26 +10,27 @@
 // this may not be good practice, but whatever
 using namespace TEngine; // Vec2, Color, Text
 
-// TODO - add some nicer texture to the blocks
 namespace Tetris {
-    Game::Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, Text::BitmapFont* font) :
+    Game::Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, Text::BitmapFont* font, SDL_Texture* mino_texture) :
         m_renderer{renderer},
         m_scale{block_scale},
         m_board_offset_x{(screen_width - COLUMNS * block_scale) / 2.0f},
         m_board_offset_y{(screen_height - ROWS * block_scale) / 2.0f},
-        m_text_font{font}
+        m_queue_offset_x{m_board_offset_x + (COLUMNS + 1.07f) * m_scale},
+        m_queue_offset_y{m_board_offset_y + 6 * m_scale},
+        m_text_font{font},
+        m_mino_texture{mino_texture}
     {
         m_playfield_matrix.fill(Color{});
         m_line_block_count.fill(0);
 
-        // ?
         m_scoreboard.default_speed = m_piece_drop_timer.get_countdown_time();
         m_scoreboard.speed = m_piece_drop_timer.get_countdown_time();
 
-        // Ideally, this wouldn't be a pointer, but I'm tired of templates...
-        m_pieces_bag = std::make_unique<Bag::Standard>();
+        // set_piece_queue<Bag::OnePiece<Tetrimino::Type::O>>();
+        set_piece_queue<Bag::Standard>();
         m_verts.reserve(4 * (ROWS - 2) * COLUMNS);
-        m_indices.reserve(6 * (ROWS - 2) * COLUMNS); 
+        m_indices.reserve(6 * (ROWS - 2) * COLUMNS);
         spawn_next_piece();
     }
 
@@ -157,10 +159,10 @@ namespace Tetris {
     void Game::draw() {
         SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(m_renderer);
+        draw_playfield_grid();
         draw_playfield_blocks();
         draw_piece(m_ghost, true, 128);
         draw_piece(m_current);
-        draw_playfield_grid();
 
         float new_scale = m_scale / 1.5f;
         // using namespace Text;
@@ -173,12 +175,7 @@ namespace Tetris {
             m_board_offset_y + 2 * m_scale,
             new_scale
         );
-        m_pieces_bag->draw(
-            m_renderer,
-            m_board_offset_x + (COLUMNS + 1.07f) * m_scale,
-            m_board_offset_y + 6 * m_scale,
-            new_scale
-        );
+        m_pieces_bag->draw();
         draw_text_elements();
     }
 
@@ -433,33 +430,37 @@ namespace Tetris {
         Color c = p.get_color();
         SDL_BlendMode mode;
         SDL_GetRenderDrawBlendMode(m_renderer, &mode);
-        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
+        if (alpha != SDL_ALPHA_OPAQUE) {
+            SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
+        }
         SDL_SetRenderDrawColor(m_renderer, c.r, c.g, c.b, alpha);
-        std::array<SDL_FRect, 4> rects{};
-        int rects_i = 0;
+
+        Color text_color;
+        SDL_GetTextureAlphaMod(m_mino_texture, &text_color.a);
+        SDL_GetTextureColorMod(m_mino_texture, &text_color.r, &text_color.g, &text_color.b);
+        SDL_SetTextureColorMod(m_mino_texture, c.r, c.g, c.b);
+        SDL_SetTextureAlphaMod(m_mino_texture, alpha);
         for (auto [x, y] : p) {
-            rects[rects_i] = { .x = x * m_scale + m_board_offset_x, .y = ((ROWS - 1) - y) * m_scale + m_board_offset_y, .w = m_scale, .h = m_scale };
-            rects_i++;
+            SDL_FRect rect = { .x = x * m_scale + m_board_offset_x, .y = ((ROWS - 1) - y) * m_scale + m_board_offset_y, .w = m_scale, .h = m_scale };
+            if (fill) {
+                SDL_RenderTexture(m_renderer, m_mino_texture, nullptr, &rect);
+            } else {
+                SDL_RenderRect(m_renderer, &rect);
+            }
         }
-        if (fill) {
-            SDL_RenderFillRects(m_renderer, rects.data(), rects_i);
-        } else {
-            SDL_RenderRects(m_renderer, rects.data(), rects_i);
+        if (alpha != SDL_ALPHA_OPAQUE) {
+            SDL_SetRenderDrawBlendMode(m_renderer, mode);
         }
-        SDL_SetRenderDrawBlendMode(m_renderer, mode);
+        SDL_SetTextureColorMod(m_mino_texture, text_color.r, text_color.g, text_color.b);
+        SDL_SetTextureAlphaMod(m_mino_texture, text_color.a);
     };
 
     void Game::draw_held_piece(const Tetrimino::Piece& p, float offset_x, float offset_y, float scale){
         Color c = p.get_color();
-        SDL_BlendMode mode;
-        SDL_GetRenderDrawBlendMode(m_renderer, &mode);
-        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(m_renderer, c.r, c.g, c.b, SDL_ALPHA_OPAQUE);
 
         std::array<SDL_FRect, 4> rects;
-        int rects_i = 0;
         float extra_off_x = 2;
-        float extra_off_y = 3;
+        float extra_off_y = 3.25;
         const auto type = p.get_type();
         if (type == Tetrimino::Type::I) {
             extra_off_x = 0.55f;
@@ -467,12 +468,23 @@ namespace Tetris {
         } else if (type == Tetrimino::Type::O) {
             extra_off_x = 1.5f;
         }
-        for (auto [x, y] : p.get_blocks()) {
-            rects[rects_i] = { .x = (x + extra_off_x) * scale + offset_x, .y = offset_y - (y - extra_off_y) * scale, .w = scale, .h = scale };
-            rects_i++;
+
+        Color text_color;
+        SDL_GetTextureAlphaMod(m_mino_texture, &text_color.a);
+        SDL_GetTextureColorMod(m_mino_texture, &text_color.r, &text_color.g, &text_color.b);
+        if (m_hold_recently_swapped) {
+            SDL_SetTextureColorMod(m_mino_texture, 128, 128, 128);
+        } else {
+            SDL_SetTextureColorMod(m_mino_texture, c.r, c.g, c.b);
         }
-        SDL_RenderFillRects(m_renderer, rects.data(), rects_i);
-        SDL_SetRenderDrawBlendMode(m_renderer, mode);
+        SDL_SetTextureAlphaMod(m_mino_texture, SDL_ALPHA_OPAQUE);
+        for (auto [x, y] : p.get_blocks()) {
+            SDL_FRect rect = { .x = (x + extra_off_x) * scale + offset_x, .y = offset_y - (y - extra_off_y) * scale, .w = scale, .h = scale };
+            SDL_RenderTexture(m_renderer, m_mino_texture, nullptr, &rect);
+        }
+        // SDL_RenderFillRects(m_renderer, rects.data(), rects_i);
+        SDL_SetTextureColorMod(m_mino_texture, text_color.r, text_color.g, text_color.b);
+        SDL_SetTextureAlphaMod(m_mino_texture, text_color.a);
         
         float thick = 4;
         if (m_scale < 10) {
@@ -511,7 +523,7 @@ namespace Tetris {
     void Game::draw_playfield_blocks() {
         SDL_RenderGeometry(
             m_renderer,
-            nullptr, m_verts.data(),
+            m_mino_texture, m_verts.data(),
             static_cast<int>(m_verts.size()),
             m_indices.data(),
             static_cast<int>(m_indices.size())
@@ -634,7 +646,7 @@ namespace Tetris {
         m_verts.clear();
         m_indices.clear();
         int v_idx = 0;
-        for (int i = 0; i < (ROWS - 1) * COLUMNS; ++i) {
+        for (int i = 0; i < (ROWS + BUFFER) * COLUMNS; ++i) {
             Color c = m_playfield_matrix[i];
             if (c.a == 0) {
                 continue;
@@ -645,7 +657,7 @@ namespace Tetris {
                 .w = m_scale,
                 .h = m_scale
             };
-            SDL_FColor color{
+            SDL_FColor color = {
                 c.r / 255.f,
                 c.g / 255.f,
                 c.b / 255.f,
@@ -660,17 +672,17 @@ namespace Tetris {
             SDL_Vertex v1 = {
                 { rect.x + rect.w, rect.y},
                 color,
-                {0, 0}
+                {1, 0}
             };
             SDL_Vertex v2 = {
                 { rect.x + rect.w, rect.y + rect.h},
                 color,
-                {0, 0}
+                {1, 1}
             };
             SDL_Vertex v3 = {
                 { rect.x, rect.y + rect.h},
                 color,
-                {0, 0}
+                {0, 1}
             };
         
             m_verts.emplace_back(v0);

@@ -1,11 +1,8 @@
 #pragma once
 
 // #include <memory>
-#include <SDL3/SDL_log.h>
 #include <unordered_map>
 #include <utility>
-#include <memory>
-#include <iostream>
 #include <filesystem>
 #include <SDL3/SDL.h>
 #include "../tengine.hpp"
@@ -49,9 +46,6 @@ namespace TEngine::Sprites {
         // scale refers to the scale of the sprite relative to its size
         void render(int sprite_id, float offset_x, float offset_y, float scale);
     private:
-        void texture_setup(const char* filepath, SDL_ScaleMode scale_mode);
-        void texture_setup_witk_color_key(const char* filepath, SDL_ScaleMode scale_mode, Color ckey);
-
         int m_tile_w;
         int m_tile_h;
         int m_tile_size;

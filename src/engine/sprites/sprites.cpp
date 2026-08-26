@@ -1,30 +1,25 @@
 #include <SDL3/SDL_log.h>
-#include <cstdlib>
-#include <cstdint>
-// #include <iostream>
-#include "sprites.hpp"
+#include <filesystem>
 
-static inline SDL_Surface* load_surface_from_png(const char* filepath);
-static inline SDL_Texture* texture_from_surface(SDL_Renderer* renderer, SDL_Surface* surface, const char* filepath);
+#include "sprites.hpp"
+#include "../texture.hpp"
 
 namespace TEngine::Sprites {
     SpriteAtlas::SpriteAtlas(const std::filesystem::path& filepath, int tile_width, int tile_height, SDL_Renderer* renderer, SDL_ScaleMode scale_mode) :
         m_tile_w{tile_width},
         m_tile_h{tile_height},
         m_tile_size{tile_width * tile_height},
-        m_renderer{renderer}
-    {
-        texture_setup(filepath.c_str(), scale_mode);
-    }
+        m_renderer{renderer},
+        m_texture{load_texture(filepath, scale_mode, renderer)}
+    {}
 
     SpriteAtlas::SpriteAtlas(const std::filesystem::path& filepath, int tile_width, int tile_height, SDL_Renderer* renderer, SDL_ScaleMode scale_mode, Color ckey) :
         m_tile_w{tile_width},
         m_tile_h{tile_height},
         m_tile_size{tile_width * tile_height},
-        m_renderer{renderer}
-    {
-        texture_setup_witk_color_key(filepath.c_str(), scale_mode, ckey);
-    }
+        m_renderer{renderer},
+        m_texture{load_texture_with_colorkey(filepath, scale_mode, {ckey.r, ckey.g, ckey.b, ckey.a}, renderer)}
+    {}
 
     void SpriteAtlas::insert_offsets(int sprite_id, int offset_x, int offset_y) {
         if (m_texture->w < offset_x * m_tile_w || m_texture->h < offset_y * m_tile_h) {
@@ -32,28 +27,6 @@ namespace TEngine::Sprites {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "offsets to sprite point to out of bounds area: x = %d, y = %d.", offset_x, offset_y);
         }
         m_id_to_offsets.insert_or_assign(sprite_id, std::make_pair(offset_x, offset_y));
-    }
-
-    void SpriteAtlas::texture_setup(const char* filepath, SDL_ScaleMode scale_mode) {
-        SDL_Surface* img = load_surface_from_png(filepath);
-
-        SDL_Texture* texture = texture_from_surface(m_renderer, img, filepath);
-        SDL_SetTextureScaleMode(texture, scale_mode);
-        SDL_DestroySurface(img);
-
-        m_texture = TextureWrapper(texture);
-    }
-
-    void SpriteAtlas::texture_setup_witk_color_key(const char* filepath, SDL_ScaleMode scale_mode, Color ckey) {
-        SDL_Surface* img = load_surface_from_png(filepath);
-        std::uint32_t key = SDL_MapRGB(SDL_GetPixelFormatDetails(img->format), nullptr, ckey.r, ckey.g, ckey.b);
-        SDL_SetSurfaceColorKey(img, true, key);
-
-        SDL_Texture* texture = texture_from_surface(m_renderer, img, filepath);
-        SDL_SetTextureScaleMode(texture, scale_mode);
-        SDL_DestroySurface(img);
-
-        m_texture = TextureWrapper(texture);
     }
 
     void SpriteAtlas::render(int sprite_id, float offset_x, float offset_y, float scale) {
@@ -93,32 +66,4 @@ namespace TEngine::Sprites {
             atlas->render(sprite_id, x, y, scale);
         }
     }
-}
-
-static inline SDL_Surface* load_surface_from_png(const char* filepath) {
-    SDL_Surface* img = SDL_LoadPNG(filepath);
-    if (!img) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-            "SpriteAtlas(const char*): could not load font image in path '%s': %s",
-            filepath, SDL_GetError()
-        );
-        // std::clog << "SpriteAtlas(const char*): could not load font image\n";
-        // std::clog << SDL_GetError();
-        std::abort();
-    }
-    return img;
-}
-
-static inline SDL_Texture* texture_from_surface(SDL_Renderer* renderer, SDL_Surface* surface, const char* filepath) {
-    SDL_Texture* img_txt = SDL_CreateTextureFromSurface(renderer, surface);
-    if (!img_txt) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-            "SpriteAtlas(const char*): surface loaded from '%s', but could not create texture from it: %s",
-            filepath, SDL_GetError()
-        );
-        // std::clog << "SpriteAtlas(const char*): could not create texture from image\n";
-        // std::clog << SDL_GetError() << '\n';
-        std::abort();
-    }
-    return img_txt;
 }

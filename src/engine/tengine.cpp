@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <format>
 #include "tengine.hpp"
 
 namespace TEngine {
@@ -133,6 +135,22 @@ namespace TEngine {
             a != other.a;   
     }
 
+    bool ColorHSB::operator==(const ColorHSB& other) const {
+        return 
+            hue == other.hue &&
+            sat == other.sat &&
+            bri == other.bri &&
+            alpha == other.alpha;
+    }
+
+    bool ColorHSB::operator!=(const ColorHSB& other) const {
+        return 
+            hue != other.hue ||
+            sat != other.sat ||
+            bri != other.bri ||
+            alpha != other.alpha;
+    }
+
     Vec2 Vec2::operator+(const Vec2 other) const {
         float x1 = this->x + other.x;
         float y1 = this->y + other.y;
@@ -232,20 +250,47 @@ namespace TEngine {
     }
 
     std::ostream& operator<<(std::ostream& output, const Color& v) {
-        output << "R:" << static_cast<int>(v.r)
-               << " G:" << static_cast<int>(v.g)
-               << " B:" << static_cast<int>(v.b)
-               << " A:" << static_cast<int>(v.a);
+        output << std::format("RGB: {} {} {} {}", v.r, v.g, v.b, v.a);
+        return output;
+    }
+
+    std::ostream& operator<<(std::ostream& output, const ColorHSB& v) {
+        output << std::format("HSB: {} {} {} {}", v.hue, v.sat, v.bri, v.alpha);
         return output;
     }
 
     std::ostream& operator<<(std::ostream& output, const Vec2& v) {
-        output << '(' << v.x << ',' << v.y << ')';
+        output << std::format("({},{})", v.x, v.y);
         return output;
     }
 
     std::ostream& operator<<(std::ostream& output, const Vec3& v) {
-        output << '(' << v.x << ',' << v.y << ',' << v.z << ')';
+        output << std::format("({},{},{})", v.x, v.y, v.z);
         return output;
+    }
+
+    void ColorHSB::increment_hue(float hue_inc) {
+        hue_inc = std::clamp(hue_inc, 0.0f, 360.0f);
+        hue += hue_inc;
+        if (hue < 0) { hue += 360; }
+        else if (hue >= 360) { hue -= 360; }
+    }
+
+    void ColorHSB::increment_sat(float sat_inc) {
+        sat_inc = std::clamp(sat_inc, 0.0f, 1.0f);
+        sat += sat_inc;
+        sat = std::clamp(sat, 0.0f, 1.0f);
+    }
+
+    void ColorHSB::increment_bri(float bri_inc) {
+        bri_inc = std::clamp(bri_inc, 0.0f, 1.0f);
+        bri += bri_inc;
+        bri = std::clamp(bri, 0.0f, 1.0f);
+    }
+
+    void ColorHSB::increment_alpha(float alpha_inc) {
+        alpha_inc = std::clamp(alpha_inc, 0.0f, 1.0f);
+        alpha += alpha_inc;
+        alpha = std::clamp(alpha, 0.0f, 1.0f);
     }
 }

@@ -20,9 +20,6 @@ static void draw_number(TEngine::Text::BitmapFont* f, Number num, float x, float
 }
 
 namespace TEngine::Text {
-    // void destroy_bitmap_renderer(BitmapRenderer* bmr) {
-    //     // delete bmr;
-    // }
     namespace BitmapFontRenderer {
         BitmapText make_bitmap_text_ch(BitmapFont* f, char ch) {
             SDL_Texture* char_texture = SDL_CreateTexture(f->get_renderer(), SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, f->tile_size(), f->tile_size());
