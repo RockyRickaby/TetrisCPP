@@ -497,3 +497,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# include everything from assets for now
+!assets/*
