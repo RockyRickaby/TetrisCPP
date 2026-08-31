@@ -1,0 +1,5 @@
+# Blender 4.2.1 LTS MTL File: 'raylib-penger.blend'
+# www.blender.org
+
+newmtl penger_mat
+map_Kd penger.png

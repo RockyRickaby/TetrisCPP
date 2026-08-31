@@ -4,6 +4,7 @@ project(TetrisCPP VERSION 0 LANGUAGES CXX C) # CXX is this project, C is SDL3
 set(TARGET_MAIN main)
 set(PROJECT_SOURCES
     src/main.cpp
+    src/appstate.cpp
     src/tetris/tetris_game.cpp
     src/tetris/tetris_menu.cpp
     src/tetris/tetris_pieces.cpp

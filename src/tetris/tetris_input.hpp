@@ -26,6 +26,7 @@ namespace Tetris {
         enum class Settings {
             Default, // uses arrow keys
             IJKL,
+            Standard_compliant,
         };
         TetrisKeys keys{};
 

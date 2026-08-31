@@ -8,11 +8,22 @@ namespace Tetris {
     MainMenu::MainMenu(TEngine::Text::BitmapFont* font, SDL_Renderer* renderer) :
         m_renderer{renderer},
         m_font{font},
-        m_wants_switch{false}
+        m_stateinput_h(),
+        m_wants_switch{false},
+        m_offset_x{-(10.0f * m_font->tile_size())},
+        m_blink{0.75f}
     {}
     
-    void MainMenu::update(double delta_t) {
-        m_offset_x += 30 * delta_t;
+    bool MainMenu::update(double delta_t) {
+        if (m_offset_x < 720.0f / 2.0f - (10 * m_font->tile_size())) {
+            m_offset_x += 60 * delta_t;
+        } else {
+            m_blink -= delta_t;
+            if (m_blink <= -0.75) {
+                m_blink = 0.75;
+            }
+        }
+        return !m_wants_switch;
     }
 
     void MainMenu::event(TEngine::Events::IEvent& event) {
@@ -24,30 +35,40 @@ namespace Tetris {
 
     void MainMenu::draw(void) {
         // TODO - implement drawing logic
-        SDL_SetRenderDrawColor(m_renderer, 100, 0, 10, SDL_ALPHA_OPAQUE);
-        SDL_RenderClear(m_renderer);
+        // SDL_SetRenderDrawColor(m_renderer, 100, 0, 10, SDL_ALPHA_OPAQUE);
+        // SDL_RenderClear(m_renderer);
         using namespace TEngine::Text;
-        BitmapFontRenderer::draw_string_line(m_font, "MAIN MENU", 20 + m_offset_x, 20, 3);
 
+        const char str[] = "tetris";
+        size_t twid = (sizeof(str) - 1);
+        float scale = 10;
+        BitmapFontRenderer::draw_string_line(m_font, str, (960 - scale * m_font->tile_size() * twid) / 2.0f, m_offset_x, scale);
+
+        if (m_offset_x >= 720.0f / 2.0f - (10 * m_font->tile_size()) && m_blink >= 0) {
+            const char str2[] = "press spacebar to start";
+            twid = (sizeof(str2) - 1);
+            scale = 3;
+            BitmapFontRenderer::draw_string_line(m_font, str2, (960 - scale * m_font->tile_size() * twid) / 2.0f, m_offset_x + 64 * scale, scale);
+        }
     }
 
-    bool MainMenu::wants_switch_state(void) {
-        return m_wants_switch;
-    }
-    
     void MainMenu::reset(void) {
-        m_offset_x = 0;
+        m_offset_x = -(10 * m_font->tile_size());
         m_wants_switch = false;
     }
 
     bool MainMenu::OnKeyPressed(TEngine::Events::KeyPressedEvent& event) {
-        std::cout << "REGISTERED KEYPRESS EVENT\n";
-        m_wants_switch = true;
+        if (m_offset_x >= 720.0f / 2.0f - (10 * m_font->tile_size())) {
+            m_wants_switch = true;
+        }
+        m_offset_x = 720.0f / 2.0f - (10 * m_font->tile_size());
         return true;
     }
+
     bool MainMenu::OnKeyReleased(TEngine::Events::KeyReleasedEvent& event) {
         return false;
     }
+
     bool MainMenu::OnKeyRepeat(TEngine::Events::KeyRepeatEvent& event) {
         std::cout << "REGISTERING KEYDOWN EVENT: " << event.get_scancde() << std::endl;
         return true;
@@ -56,9 +77,11 @@ namespace Tetris {
     bool MainMenu::OnMousePressed(TEngine::Events::IEvent& event) {
         return false;
     }
+
     bool MainMenu::OnMouseReleased(TEngine::Events::IEvent& event) {
         return false;
     }
+
     bool MainMenu::OnMouseDown(TEngine::Events::IEvent& event) {
         return false;
     }

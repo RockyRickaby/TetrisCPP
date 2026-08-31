@@ -36,10 +36,9 @@ namespace Tetris {
             void reset() override;
 
         private:
-            std::random_device rd;
-            std::mt19937 m_random_engine;
-            std::uniform_int_distribution<int> m_dist;
             int m_next;
+            int m_range_min;
+            int m_range_max;
 
             SDL_Renderer* m_renderer;
             SDL_Texture* m_mino;
@@ -59,7 +58,7 @@ namespace Tetris {
 
         private:
             void regen_geometry();
-
+            std::mt19937 m_random_engine;
             SDL_Renderer* m_renderer;
             SDL_Texture* m_mino;
             float m_offset_x;
@@ -68,8 +67,6 @@ namespace Tetris {
 
             std::vector<Tetrimino::Type> m_pieces;
             std::vector<Tetrimino::Type> m_bag_pool;
-            std::random_device rd;
-            std::mt19937 m_random_engine;
 
             std::vector<SDL_Vertex> m_verts;
             std::vector<int> m_indices;

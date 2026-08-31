@@ -711,7 +711,8 @@ namespace Tetris {
 
         lines_cleared += cleared;
         if (level < max_level && lines_cleared >= goal) {
-            level  = (level + 1) % max_level;
+            level = level + 1;
+            level = level > max_level ? max_level : level;
             speed = calculate_speed();
             goal = 10;
             lines_cleared = 0;

@@ -1,70 +1,69 @@
 #include <SDL3/SDL_surface.h>
 #include <vector>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <SDL3/SDL.h>
 
 #include "fonts.hpp"
 
 namespace TEngine::Text {
-    JoustFont::JoustFont(const std::filesystem::path& font_path, int tile_size, SDL_Renderer* renderer, Color color_key) :
-        m_atlas{font_path, tile_size, tile_size, renderer, SDL_SCALEMODE_NEAREST, color_key}
-    {
-        setup_atlas();
-    }
-
-    void JoustFont::render_char(char c, float offset_x, float offset_y, float scale) {
+    void BitmapFont::render_char(char c, float offset_x, float offset_y, float scale) {
         m_atlas.render(static_cast<int>(c), offset_x, offset_y, scale);
     }
 
-    void JoustFont::setup_atlas() {
-       std::vector<std::pair<char, int>> m_char_to_idx{{
-            {'A', 0},{'a', 0},
-            {'B', 1},{'b', 1},
-            {'C', 2},{'c', 2},
-            {'D', 3},{'d', 3},
-            {'E', 4},{'e', 4},
-            {'F', 5},{'f', 5},
-            {'G', 6},{'g', 6},
-            {'H', 7},{'h', 7},
-            {'I', 8},{'i', 8},
-            {'J', 9},{'j', 9},
-            {'K', 10},{'k', 10},
-            {'L', 11},{'l', 11},
-            {'M', 12},{'m', 12},
-            {'N', 13},{'n', 13},
-            {'O', 14},{'o', 14},
-            {'P', 15},{'p', 15},
-            {'Q', 16},{'q', 16},
-            {'R', 17},{'r', 17},
-            {'S', 18},{'s', 18},
-            {'T', 19},{'t', 19},
-            {'U', 20},{'u', 20},
-            {'V', 21},{'v', 21},
-            {'W', 22},{'w', 22},
-            {'X', 23},{'x', 23},
-            {'Y', 24},{'y', 24},
-            {'Z', 25},{'z', 25},
-            {'0', 26},
-            {'1', 27},
-            {'2', 28},
-            {'3', 29},
-            {'4', 30},
-            {'5', 31},
-            {'6', 32},
-            {'7', 33},
-            {'8', 34},
-            {'9', 35},
-            {'?', 36},
-            {'(', 39},
-            {'-', 40},
-            {'.', 41},
-            {'=', 44},
-            {'!', 45},
-            {')', 46},
-            {' ', 47} // blank square
-        }};
+    BitmapFont::BitmapFont(Sprites::SpriteAtlas&& atlas, int tile_size) :
+        m_atlas{std::move(atlas)},
+        m_tile_size{tile_size}
+    {}
 
-        for (const auto [ch, idx] : m_char_to_idx) {
-            m_atlas.insert_offsets(static_cast<int>(ch), idx % 10, idx / 10);
+    BitmapFont::BitmapFont(BitmapFont&& other) noexcept :
+        m_atlas(std::move(other.m_atlas)),
+        m_tile_size(other.m_tile_size)
+    {}
+
+    BitmapFont BitmapFont::load_font(const std::filesystem::path& filepath, int tile_size, SDL_Renderer* renderer, SDL_ScaleMode scale_mode, Color key) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Loading bitmap font %s.", filepath.string().c_str());
+        std::ifstream fs;
+        fs.open(filepath);
+        if (!fs.is_open()) {
+            throw std::runtime_error(std::string{"could not find path: "} + filepath.string());
         }
+
+        std::string line;
+        Sprites::SpriteAtlas spr;
+        while (std::getline(fs, line)) {
+            std::istringstream iss{line};
+            std::string data;
+
+            iss >> data;
+            if (data == "atlas") {
+                iss >> data;
+                spr = Sprites::SpriteAtlas(filepath.parent_path() / data, tile_size, tile_size, renderer, scale_mode, key);
+            } else if (data == "m") {
+                char ch;
+                int x;
+                int y;
+                iss >> ch;
+                iss >> x;
+                iss >> y;
+                spr.insert_offsets(static_cast<int>(ch), x, y);
+            } else if (data == "b") {
+                char ch = ' ';
+                int x;
+                int y;
+                iss >> x;
+                iss >> y;
+                spr.insert_offsets(static_cast<int>(ch), x, y);
+            } else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "ignoring line %s.", line.c_str());
+            }
+        }
+        return {std::move(spr), tile_size};
+    }
+
+    BitmapFont& BitmapFont::operator=(BitmapFont other) {
+        swap(*this, other);
+        return *this;
     }
 }

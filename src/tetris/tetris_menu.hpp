@@ -8,10 +8,9 @@ namespace Tetris {
     class MainMenu : public TEngine::Events::EventListener {
     public:
         MainMenu(TEngine::Text::BitmapFont* m_font, SDL_Renderer* renderer);
-        void update(double delta_t);
+        bool update(double delta_t);
         void event(TEngine::Events::IEvent& event) override;
         void draw(void);
-        bool wants_switch_state(void);
         void reset(void);
     private:
         bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event) override;
@@ -28,5 +27,6 @@ namespace Tetris {
         bool m_wants_switch;
 
         float m_offset_x = 0;
+        double m_blink = 0;
     };
 }

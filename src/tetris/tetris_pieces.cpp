@@ -114,9 +114,6 @@ namespace Tetris {
         }
 
         const std::unordered_map<Type, Piece> DEFAULT_PIECES = {
-        // const std::map<Type, Piece> DEFAULT_PIECES = {
-            // {Type::None, {}},
-            // {Type::Custom, {}},
             {Type::I, Piece{Type::I, {TEngine::TUtils::color_from_hex("#00E6FE")}, {3, 20}, {1.5, -0.5}, { TEngine::Vec2{0,0}, TEngine::Vec2{1,0}, TEngine::Vec2{2,0}, TEngine::Vec2{3,0} }}}, 
             {Type::J, Piece{Type::J, {TEngine::TUtils::color_from_hex("#1801FF")}, {4, 20}, {0, 0}, { TEngine::Vec2{-1,1}, TEngine::Vec2{-1,0}, TEngine::Vec2{0,0}, TEngine::Vec2{1,0} }}}, 
             {Type::L, Piece{Type::L, {TEngine::TUtils::color_from_hex("#FF7308")}, {4, 20}, {0, 0}, { TEngine::Vec2{1,0}, TEngine::Vec2{0,0}, TEngine::Vec2{-1,0}, TEngine::Vec2{1,1} }}},

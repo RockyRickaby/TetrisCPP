@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
+#include <random>
 #include "tetris_bags.hpp"
 // #include "tetris_utils.hpp"
 #include "../engine/tengine.hpp"
@@ -11,21 +12,18 @@ namespace Tetris{
     namespace Bag {
         // RANDOM!!!
         Random::Random(SDL_Renderer *renderer, SDL_Texture* mino, float offset_x, float offset_y, float block_scale) :
-            rd{},
-            m_random_engine{rd()},
-            m_dist{Tetrimino::min_type_as_int(), Tetrimino::max_type_as_int()},
+            m_range_min{Tetrimino::min_type_as_int()},
+            m_range_max{Tetrimino::max_type_as_int()},    
             m_renderer{renderer},
             m_mino{mino},
             m_offset_x{offset_x},
             m_offset_y{offset_y},
             m_block_scale{block_scale}
-        {
-            m_next = m_dist(m_random_engine);
-        }
+        {}
 
         Tetrimino::Piece Random::operator()() {
             int piece_idx = m_next;
-            m_next = m_dist(m_random_engine);
+            m_next = TEngine::random_int(m_range_min, m_range_max);
             return Tetrimino::get_piece(static_cast<Tetrimino::Type>(piece_idx));
         }
 
@@ -84,11 +82,12 @@ namespace Tetris{
         }
 
         void Random::reset() {
-            m_next = m_dist(m_random_engine);
+            m_next = TEngine::random_int(m_range_min, m_range_max);
         }
 
         // 7 BAG!!!
         Standard::Standard(SDL_Renderer *renderer, SDL_Texture* mino, float offset_x, float offset_y, float block_scale) :
+            m_random_engine{std::random_device{}()},
             m_renderer{renderer},
             m_mino{mino},
             m_offset_x{offset_x},
@@ -96,8 +95,6 @@ namespace Tetris{
             m_block_scale{block_scale},
             m_pieces{},
             m_bag_pool{},
-            rd{},
-            m_random_engine{rd()},
             m_verts{},
             m_indices{}
         {
@@ -111,7 +108,6 @@ namespace Tetris{
             std::shuffle(m_pieces.begin(), m_pieces.end(), m_random_engine);
             m_bag_pool = m_pieces;
             std::shuffle(m_pieces.begin(), m_pieces.end(), m_random_engine);
-
             regen_geometry();
         }
 

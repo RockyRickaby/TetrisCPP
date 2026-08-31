@@ -5,6 +5,10 @@
 
 namespace Tetris {
     bool Keybinds::setup_keys(Settings bind_settings) {
+        SDL_Scancode rotccw = SDL_SCANCODE_D;
+        SDL_Scancode rotcw = SDL_SCANCODE_F; 
+        SDL_Scancode hold = SDL_SCANCODE_SPACE;
+        SDL_Scancode pause = SDL_SCANCODE_P;
         if (bind_settings == Settings::Default) {
             keys.left.scancode = SDL_SCANCODE_LEFT;
             keys.right.scancode = SDL_SCANCODE_RIGHT;
@@ -15,11 +19,21 @@ namespace Tetris {
             keys.right.scancode = SDL_SCANCODE_L;
             keys.down.scancode = SDL_SCANCODE_K;
             keys.hard_drop.scancode = SDL_SCANCODE_I;
+        } else if (bind_settings == Settings::Standard_compliant) {
+            keys.left.scancode = SDL_SCANCODE_LEFT;
+            keys.right.scancode = SDL_SCANCODE_RIGHT;
+            keys.down.scancode = SDL_SCANCODE_DOWN;
+            keys.hard_drop.scancode = SDL_SCANCODE_SPACE;
+
+            rotccw = SDL_SCANCODE_Z;
+            rotcw = SDL_SCANCODE_X; 
+            hold = SDL_SCANCODE_C;
+            pause = SDL_SCANCODE_ESCAPE;
         }
-        keys.rotate_counterclockwise.scancode = SDL_SCANCODE_D;
-        keys.rotate_clockwise.scancode = SDL_SCANCODE_F; 
-        keys.hold_piece.scancode = SDL_SCANCODE_SPACE;
-        keys.pause.scancode = SDL_SCANCODE_ESCAPE;
+        keys.rotate_counterclockwise.scancode = rotccw;
+        keys.rotate_clockwise.scancode = rotcw; 
+        keys.hold_piece.scancode = hold;
+        keys.pause.scancode = pause;
 
         keys.rotate_counterclockwise.may_repeat = false;
         keys.rotate_clockwise.may_repeat = false;

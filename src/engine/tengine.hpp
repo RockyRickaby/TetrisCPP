@@ -1,9 +1,12 @@
 #pragma once
 
 #include <cmath>
+#include <concepts>
 #include <cstdint>
 #include <iostream>
 #include <SDL3/SDL.h>
+#include <random>
+#include <type_traits>
 
 // TODO - implement little 3D software renderer as seen in mista a-zozin's video (https://github.com/tsoding/formula)
 namespace TEngine {
@@ -27,12 +30,36 @@ namespace TEngine {
         Countdown(double count, bool autoreset = false);
         bool done(double delta_t);
         void set_countdown_time(double time);
-        double get_countdown_time(void);
+        double get_countdown_time(void) { return m_time_delta; }
+        double get_time_left(void) { return m_time_counter; }
         void reset(void);
     private:
         double m_time_counter;
         double m_time_delta;
     };
+
+    class Random {
+    public:
+        Random() = default;
+        Random(std::mt19937::result_type seed) : eng{seed} {};
+
+        int draw_int(int min, int max) { return std::uniform_int_distribution<int>{min, max}(eng); }
+        float draw_float(float min, float max) { return std::uniform_real_distribution<float>{min, max}(eng); }
+    private:
+        std::mt19937 eng{std::random_device{}()};
+    };
+
+    int random_int(int min, int max);
+    float random_float(float min, float max);
+
+    template<typename N> requires(std::is_arithmetic_v<N>)
+    N random_number(N min, N max) {
+        if constexpr (std::is_floating_point_v<N>) {
+            return random_float(min, max);
+        } else {
+            return random_int(min, max);
+        }
+    }
 
     // this is a very small class. you can just copy it around with no issues.
     // use the [] operator to get the state of a key (indexed by an SDL_Scancode).
@@ -70,11 +97,11 @@ namespace TEngine {
             Wait,
             Repeat
         };
-        TEngine::Time m_timer{};
+        Time m_timer{};
         KeyState m_keystate{0};
 
-        TEngine::Countdown m_repeat_delay{0.27, true};
-        TEngine::Countdown m_repeat_interval{0.025, true};
+        Countdown m_repeat_delay{0.27, true};
+        Countdown m_repeat_interval{0.025, true};
 
         friend class InputHandler;
     };
@@ -133,16 +160,17 @@ namespace TEngine {
         float x = 0;
         float y = 0;
 
-        Vec2& normalize() {
+        Vec2 normalize() const {
             float len = length();
-            x /= len;
-            y /= len;
-            return *this;
+            return {
+                x / len,
+                y / len
+            };
         }
 
-        float length() { return std::sqrtf(x * x + y * y); }
-        float dot(const Vec2 other) { return (x * other.x) + (y * other.y); }
-        float cross2D(const Vec2 other) { return (x * other.y) - (y * other.x); }
+        float length() const { return std::sqrtf(x * x + y * y); }
+        float dot(const Vec2 other) const { return (x * other.x) + (y * other.y); }
+        float cross2D(const Vec2 other) const { return (x * other.y) - (y * other.x); }
 
         Vec2 operator+(const Vec2 other) const;
         Vec2 operator-(const Vec2 other) const;
@@ -161,22 +189,23 @@ namespace TEngine {
         float y = 0;
         float z = 0;
 
-        Vec3& normalize() {
+        Vec3 normalize() const {
             float len = length();
-            x /= len;
-            y /= len;
-            z /= len;
-            return *this;
+            return {
+                x / len,
+                y / len,
+                z / len
+            };
         }
 
-        float length() { return std::sqrtf(x * x + y * y + z * z); }
-        float dot(const Vec3& other) {
+        float length() const { return std::sqrtf(x * x + y * y + z * z); }
+        float dot(const Vec3& other) const {
             return
                 (x * other.x) +
                 (y * other.y) +
                 (z * other.z);
         }
-        Vec3 cross(const Vec3& other) {
+        Vec3 cross(const Vec3& other) const {
             return {
                 (y * other.z) - (z * other.y),
                 (z * other.x) - (x * other.z),

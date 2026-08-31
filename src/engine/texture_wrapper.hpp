@@ -13,7 +13,7 @@ namespace TEngine {
         // custom deleter so we can just use a flipping std::unique_ptr (no shared pointers!!!)
         struct TextureDeleter {
             void operator()(SDL_Texture* texture) {
-                // std::cerr << "calling delete on TextureWrapper\n";
+                std::cerr << "calling delete on TextureWrapper\n";
                 SDL_DestroyTexture(texture);
             }
         };
@@ -40,7 +40,7 @@ namespace TEngine {
         // custom deleter so we can just use a flipping std::unique_ptr (no shared pointers!!!)
         struct TextureDeleter {
             void operator()(SDL_Texture* texture) {
-                std::cerr << "calling delete on SharedTextureWrapper\n";
+                // std::cerr << "calling delete on SharedTextureWrapper\n";
                 SDL_DestroyTexture(texture);
             }
         };

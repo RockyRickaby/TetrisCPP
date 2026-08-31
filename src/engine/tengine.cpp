@@ -3,7 +3,18 @@
 #include "tengine.hpp"
 
 namespace TEngine {
+    // convenience if we don't want to create a new Random instance every time
+    // we need a random number 
+    static Random rnd;
     const bool* KeyboardState::m_keyboard = nullptr;
+
+    int random_int(int min, int max) {
+        return rnd.draw_int(min, max);
+    }
+
+    float random_float(float min, float max) {
+        return rnd.draw_float(min, max);
+    }
 
     bool KeyboardState::init_keyboard() {
         if (m_keyboard == nullptr && SDL_WasInit(SDL_INIT_VIDEO)) {
@@ -36,7 +47,7 @@ namespace TEngine {
             if (autoreset) {
                 reset();
             } else {
-                m_time_counter += delta_t; // unlikely to happen, but prevent the value from getting tooooooo small
+                m_time_counter = 0; // unlikely to happen, but prevent the value from getting tooooooo small
             }
             return true;
         }
@@ -46,10 +57,6 @@ namespace TEngine {
     void Countdown::set_countdown_time(double time) {
         m_time_delta = time;
         reset();
-    }
-
-    double Countdown::get_countdown_time(void) {
-        return m_time_delta;
     }
 
     void Countdown::reset(void) {

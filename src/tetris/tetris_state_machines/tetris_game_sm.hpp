@@ -17,7 +17,6 @@ namespace Tetris::States {
 
     class TetrisStateMachine;
 
-    // TODO - accept Tetris::Menu instance!!!!
     class MenuState final : public TEngine::StateMachine::State {
     public:
         MenuState(TetrisStateMachine *sm, MainMenu* menu, Tetris::Keybinds* tetris_keys, SDL_Renderer *renderer, TEngine::Text::BitmapFont* font) :
@@ -25,7 +24,9 @@ namespace Tetris::States {
             m_menu{menu},
             m_tetris_keys(tetris_keys),
             m_font{font},
-            m_renderer{renderer}
+            m_renderer{renderer},
+            tmp_counter{10},
+            m_read_any{true}
         {}
 
         void enter(void) override;
@@ -37,22 +38,37 @@ namespace Tetris::States {
         void exit(void) override;
     private:
         bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event) override;
+
         TetrisStateMachine *m_sm_ptr;
         MainMenu* m_menu;
         Tetris::Keybinds *m_tetris_keys;
         TEngine::Text::BitmapFont* m_font;
         SDL_Renderer *m_renderer;
-        double tmp_counter = 5;
+        double tmp_counter;
+        bool m_read_any;
     };
+
+
+
+
+
+
+
+
 
     class RunGameState final : public TEngine::StateMachine::State {
     public:
-        RunGameState(TetrisStateMachine* sm, Game* game, Tetris::Keybinds* tetris_keys, SDL_Renderer* renderer) :
+        RunGameState(TetrisStateMachine* sm, Game* game, Tetris::Keybinds* tetris_keys, TEngine::Text::BitmapFont* font, SDL_Renderer* renderer) :
+            m_run_state(),
             m_game_ptr{game},
             m_parent_sm(sm),
-            m_keyboard_state{},
             m_tetris_keys(tetris_keys),
-            m_renderer{renderer}
+            m_renderer{renderer},
+            m_font{font},
+            m_keyboard_state{},
+            m_begin_countdown{3},
+            m_pause_countdown{0},
+            m_pause{false}
         {}
 
         void enter() override;
@@ -64,14 +80,35 @@ namespace Tetris::States {
         void exit() override;
 
     private:
+        // not needed for now
+        enum class State {
+            Begin,
+            Running,
+            Pause
+        };
+        State m_run_state;
+
         bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event) override;
 
         Game *m_game_ptr;
         TetrisStateMachine *m_parent_sm;
-        TEngine::InputHandler m_keyboard_state;
         Tetris::Keybinds* m_tetris_keys;
         SDL_Renderer *m_renderer;
+        TEngine::Text::BitmapFont* m_font;
+        TEngine::InputHandler m_keyboard_state;
+
+        TEngine::Countdown m_begin_countdown;
+        TEngine::Countdown m_pause_countdown;
+        bool m_pause;
     };
+
+
+
+
+
+
+
+
 
     class GameOverState final : public TEngine::StateMachine::State {
     public:
@@ -94,6 +131,14 @@ namespace Tetris::States {
         SDL_Renderer *m_renderer;
         double tmp_counter = 5;
     };
+
+
+
+
+
+
+
+
 
     // dedicated state machine for handling everything needed for the game to run
     class TetrisStateMachine : public TEngine::StateMachine::StateMachine {
