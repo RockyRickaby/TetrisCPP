@@ -173,9 +173,9 @@ namespace TEngine::Silly3D {
         void rotate_x(float r);
         void rotate_y(float r);
         void rotate_z(float r);
-        void draw_instance(const Vec3& light_pos, float light_ambient);
-        void draw_wireframe();
-        void draw_geometry(const Vec3& light_pos, float light_ambient);
+        void draw_instance(const Vec3& light_pos, float light_ambient) const;
+        void draw_wireframe() const;
+        void draw_geometry(const Vec3& light_pos, float light_ambient) const;
 
         void update_window(int win_w, int win_h) {
             m_window_w = win_w;

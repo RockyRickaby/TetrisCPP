@@ -383,7 +383,7 @@ namespace TEngine::Silly3D {
         else if (rotation.z >= 2 * SDL_PI_F) rotation.z -= 2 * SDL_PI_F;
     }
 
-    void SillyInstance3D::draw_instance(const Vec3& light_pos, float light_ambient) {
+    void SillyInstance3D::draw_instance(const Vec3& light_pos, float light_ambient) const {
         if (fill) {
             draw_geometry(light_pos, light_ambient);
         } else {
@@ -391,7 +391,7 @@ namespace TEngine::Silly3D {
         }
     }
 
-    void SillyInstance3D::draw_wireframe() {
+    void SillyInstance3D::draw_wireframe() const {
         SDL_BlendMode b;
         SDL_Renderer* r = renderer;
         SDL_GetRenderDrawBlendMode(r, &b);
@@ -422,7 +422,7 @@ namespace TEngine::Silly3D {
         // SDL_RenderLines(r, m_wireframe.data(), m_wireframe.size());
     }
 
-    void SillyInstance3D::draw_geometry(const Vec3& light_pos, float light_ambient) {
+    void SillyInstance3D::draw_geometry(const Vec3& light_pos, float light_ambient) const {
         SDL_BlendMode b;
         SDL_Renderer* r = renderer;
         SDL_GetRenderDrawBlendMode(r, &b);
