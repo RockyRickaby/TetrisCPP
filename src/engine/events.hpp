@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tengine.hpp"
 #include <functional>
 #include <typeindex>
 #include <cstdint>
@@ -63,12 +64,74 @@ namespace TEngine {
             SDL_Scancode m_scancode;
         };
 
+        class MousePressedEvent : public IEvent {
+        public:
+            MousePressedEvent(int mouse_button, float x, float y) :
+                m_button{mouse_button},
+                m_x{x},
+                m_y{y}
+            {}
+
+            bool right_button_pressed() const { return m_button == SDL_BUTTON_RIGHT; }
+            bool left_button_pressed() const { return m_button == SDL_BUTTON_LEFT; }
+            Vec2 get_position() const { return { m_x, m_y }; }
+
+            EVENT_CLASS_TYPE(MousePressed)
+        private:
+            int m_button;
+            float m_x;
+            float m_y;
+        };
+
+        class MouseReleasedEvent : public IEvent {
+        public:
+            MouseReleasedEvent(int mouse_button, float x, float y) :
+                m_button{mouse_button},
+                m_x{x},
+                m_y{y}
+            {}
+
+            bool right_button_released() const { return m_button == SDL_BUTTON_RIGHT; }
+            bool left_button_released() const { return m_button == SDL_BUTTON_LEFT; }
+            Vec2 get_position() const { return { m_x, m_y }; }
+
+            EVENT_CLASS_TYPE(MouseReleased)
+        private:
+            int m_button;
+            float m_x;
+            float m_y;
+        };
+
+        class MouseMovedEvent : public IEvent {
+        public:
+            MouseMovedEvent(float x, float y, float dx, float dy) :
+                m_x{x},
+                m_y{y},
+                m_dx{dx},
+                m_dy{dy}
+            {}
+
+            Vec2 get_direction() const { return { m_dx, m_dy }; }
+            Vec2 get_position() const { return { m_x, m_y }; }
+
+            EVENT_CLASS_TYPE(MouseMoved)
+        private:
+            float m_x;
+            float m_y;
+            float m_dx;
+            float m_dy;
+        };
+
         // handful abstract class for implementing event methods
         class EventListener {
         public:
             virtual ~EventListener() = default;
             virtual void event(IEvent&) {};
-        protected:
+        };
+
+        class EventListenerFunctions {
+        public:
+            virtual ~EventListenerFunctions() = default;
             // keyboard events
             virtual bool OnKeyPressed(KeyPressedEvent&) { return false; }
             virtual bool OnKeyReleased(KeyReleasedEvent&) { return false; }
@@ -76,9 +139,9 @@ namespace TEngine {
 
             // mouse events
             // TODO - implement these events
-            virtual bool OnMousePressed(IEvent&) { return false; }
-            virtual bool OnMouseReleased(IEvent&) { return false; }
-            virtual bool OnMouseDown(IEvent&) { return false; }
+            virtual bool OnMousePressed(MousePressedEvent&) { return false; }
+            virtual bool OnMouseReleased(MouseReleasedEvent&) { return false; }
+            virtual bool OnMouseMoved(MouseMovedEvent&) { return false; }
         };
 
         class EventDispatcher final {

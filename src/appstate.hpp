@@ -5,6 +5,7 @@
 #include <SDL3/SDL.h>
 
 #include "engine/tengine.hpp"
+#include "engine/silly3D/silly_3D.hpp"
 #include "tetris/tetris_game.hpp"
 #include "tetris/tetris_menu.hpp"
 #include "tetris/tetris_input.hpp"
@@ -21,6 +22,8 @@ public:
     ~AppState();
 
 private:
+    std::vector<TEngine::Silly3D::SillyInstance3D> pieces3dwire;
+    std::vector<TEngine::Silly3D::SillyInstance3D> pieces3dfill;
     /* We will use this renderer to draw into this window every frame. */
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
@@ -32,7 +35,6 @@ private:
     std::unique_ptr<Tetris::States::TetrisStateMachine> game_sm;
     
     TEngine::Text::BitmapFont font;
-    TEngine::Sprites::SpriteAtlas spratlas;
     // std::unique_ptr<TEngine::Sprites::SpriteEntity> entity;
     Tetris::Keybinds tetris_keys;
 
@@ -44,6 +46,8 @@ private:
     std::filesystem::path assets_root = std::filesystem::path("assets");
     std::filesystem::path fonts_root = assets_root / "fonts"; 
     std::filesystem::path models_root = assets_root / "sillymodels";
+    
+    TEngine::Silly3D::SillyAssetManager silly_assets3d{nullptr};
 
     int window_width = 800;
     int window_height = 600;

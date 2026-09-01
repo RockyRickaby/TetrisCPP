@@ -1,3 +1,5 @@
+#include "engine/tengine.hpp"
+#include <SDL3/SDL_events.h>
 #define SDL_MAIN_USE_CALLBACKS 1  /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -23,6 +25,13 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_Q) {
             return SDL_APP_SUCCESS;
         }
+    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        // event->button.button == SDL_BUTTON_RIGHT;
+        std::cout << TEngine::Vec2{event->button.x,event->button.y} << std::endl;
+    } else if (event->type == SDL_EVENT_MOUSE_MOTION) {
+        std::cout << TEngine::Vec2{event->motion.xrel,event->motion.yrel} << std::endl;
+    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        // event->button.
     }
     state->raise_event(event);
     return SDL_APP_CONTINUE;  /* carry on with the program! */

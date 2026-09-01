@@ -1,7 +1,7 @@
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_init.h>
-#include <SDL3/SDL_surface.h>
 #include <filesystem>
+#include <array>
+#include <utility>
 
 #include "appstate.hpp"
 #include "engine/text/fonts.hpp"
@@ -14,7 +14,6 @@ struct Experimental {
     TEngine::Silly3D::SillyModel* sillymodel;
     TEngine::Silly3D::SillyInstance3D instance;
 
-    TEngine::Silly3D::SillyAssetManager silly_assets{nullptr};
     // TEngine::Silly3D::SillyModel* penger;
 
     TEngine::Text::BitmapFont fnt;
@@ -52,7 +51,7 @@ SDL_AppResult AppState::setup_app() {
     // SDL_SetRenderVSync(renderer, true);
     SDL_SetRenderLogicalPresentation(renderer, window_width, window_height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     __testing = new Experimental();
-    
+    silly_assets3d = Silly3D::SillyAssetManager{renderer};
 
     fs::path joust_font_path = fonts_root / "JoustFont";
     // spratlas = TEngine::Sprites::SpriteAtlas(joust_font_path, 8, 8, renderer, SDL_SCALEMODE_NEAREST);
@@ -78,16 +77,41 @@ SDL_AppResult AppState::setup_app() {
         &font
     );
 
+    using namespace Tetris::Tetrimino;
+    const auto v = std::array{
+        std::make_pair<std::string, Type>("Ipiece", Type::I),
+        std::make_pair<std::string, Type>("Jpiece", Type::J),
+        std::make_pair<std::string, Type>("Lpiece", Type::L),
+        std::make_pair<std::string, Type>("Opiece", Type::O),
+        std::make_pair<std::string, Type>("Spiece", Type::S),
+        std::make_pair<std::string, Type>("Tpiece", Type::T),
+        std::make_pair<std::string, Type>("Zpiece", Type::Z)
+    };
+
+    for (const auto& [file, type] : v) {
+        // [[maybe_unused]] auto& m1 = asset
+        const auto& m1 = silly_assets3d.load_model(models_root / "pieces" / (file + "Tri.obj"));
+        pieces3dfill.emplace_back(silly_assets3d.instance_from(m1.name, window_width, window_height));
+        pieces3dfill.back().fill = true;
+        pieces3dfill.back().position = {0,0,4};
+        pieces3dfill.back().color = Tetris::Tetrimino::get_piece(type).get_color();
+
+        const auto& m2 = silly_assets3d.load_model(models_root / "pieces" / (file + ".obj"));
+        pieces3dwire.emplace_back(silly_assets3d.instance_from(m2.name, window_width, window_height));
+        pieces3dwire.back().cull_wireframe = true;
+        pieces3dwire.back().position = {0,0,4};
+        pieces3dwire.back().color = pieces3dfill.back().color;
+    }
+
     // game_sm->switch_to(Tetris::States::STATE_MAIN_MENU);
     
     // TODO - make this constructor explicit
-    __testing->silly_assets = renderer;
-    __testing->sillymodel = &__testing->silly_assets.load_model(
+    __testing->sillymodel = &silly_assets3d.load_model(
         models_root / "pieces" / "Tpiece.obj"
     );
 
     // instance = {"penger", sillymodel, {0, 0, 3}, {}, TEngine::TUtils::color_from_hex("#FFDE00"), renderer, width, height};
-    __testing->instance = __testing->silly_assets.instance_from(__testing->sillymodel->name, window_width, window_height);
+    __testing->instance = silly_assets3d.instance_from(__testing->sillymodel->name, window_width, window_height);
     __testing->instance.position += Vec3{0, 0, 4};
     __testing->instance.rotation = { 0, 0,0 };
     __testing->instance.color = TEngine::TUtils::color_from_hex("#B802FD");
@@ -99,6 +123,9 @@ SDL_AppResult AppState::setup_app() {
     return SDL_APP_CONTINUE;
 }
 
+// static double lim = 1.0/(60);
+static double lim = 0;
+static double acc = 0;
 SDL_AppResult AppState::update_and_draw() {
     using namespace TEngine;
     double delta = time.delta_time();
@@ -112,7 +139,19 @@ SDL_AppResult AppState::update_and_draw() {
     SDL_RenderClear(renderer);
     game_sm->draw();
 
-    __testing->instance.rotate_y((3.14f / 2) / 2 * delta);
+    // for (auto& m : pieces3dfill) {
+    //     if (m.model->name != "IpieceTri") continue;
+    //     m.rotate_y((1.0f / 2) / 2 * delta);
+    //     m.draw_geometry({}, 0.5f);
+    //     // m.draw_wireframe();
+    //     // break;
+    // }
+
+    acc += delta;
+    if (acc >= lim) {
+        __testing->instance.rotate_y((3.14f / 2.0f) / 2.0f * acc);
+        acc = 0;
+    }
     __testing->instance.draw_instance({0,100,-100}, .5f);
 
     // __testing->fnt.render_char('c', 5, 5, 5);
@@ -125,57 +164,4 @@ SDL_AppResult AppState::update_and_draw() {
 
 AppState::~AppState() {
     delete __testing;
-}
-
-static inline void setup_atlas(TEngine::Sprites::SpriteAtlas* spr) {
-    std::vector<std::pair<int, int>> m_char_to_idx{{
-        {1, 0},{'a', 0},
-        {2, 1},{'b', 1},
-        {3, 2},{'c', 2},
-        {4, 3},{'d', 3},
-        {5, 4},{'e', 4},
-        {'F', 5},{'f', 5},
-        {'G', 6},{'g', 6},
-        {'H', 7},{'h', 7},
-        {'I', 8},{'i', 8},
-        {'J', 9},{'j', 9},
-        {'K', 10},{'k', 10},
-        {'L', 11},{'l', 11},
-        {'M', 12},{'m', 12},
-        {'N', 13},{'n', 13},
-        {'O', 14},{'o', 14},
-        {'P', 15},{'p', 15},
-        {'Q', 16},{'q', 16},
-        {'R', 17},{'r', 17},
-        {'S', 18},{'s', 18},
-        {'T', 19},{'t', 19},
-        {'U', 20},{'u', 20},
-        {'V', 21},{'v', 21},
-        {'W', 22},{'w', 22},
-        {'X', 23},{'x', 23},
-        {'Y', 24},{'y', 24},
-        {'Z', 25},{'z', 25},
-        {'0', 26},
-        {'1', 27},
-        {'2', 28},
-        {'3', 29},
-        {'4', 30},
-        {'5', 31},
-        {'6', 32},
-        {'7', 33},
-        {'8', 34},
-        {'9', 35},
-        {'?', 36},
-        {'(', 39},
-        {'-', 40},
-        {'.', 41},
-        {'=', 44},
-        {'!', 45},
-        {')', 46},
-        {' ', 47} // blank square
-    }};
-
-    for (const auto [ch, idx] : m_char_to_idx) {
-        spr->insert_offsets(static_cast<int>(ch), idx % 10, idx / 10);
-    }
 }
