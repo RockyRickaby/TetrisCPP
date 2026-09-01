@@ -82,7 +82,7 @@ namespace Tetris {
         return false;
     }
 
-    bool MainMenu::OnMouseDown(TEngine::Events::IEvent& event) {
-        return false;
-    }
+    // bool MainMenu::OnMouseDown(TEngine::Events::IEvent& event) {
+    //     return false;
+    // }
 }

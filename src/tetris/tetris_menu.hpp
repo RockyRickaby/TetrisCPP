@@ -13,13 +13,13 @@ namespace Tetris {
         void draw(void);
         void reset(void);
     private:
-        bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event) override;
-        bool OnKeyReleased(TEngine::Events::KeyReleasedEvent& event) override;
-        bool OnKeyRepeat(TEngine::Events::KeyRepeatEvent& event) override;
+        bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event);
+        bool OnKeyReleased(TEngine::Events::KeyReleasedEvent& event);
+        bool OnKeyRepeat(TEngine::Events::KeyRepeatEvent& event);
 
-        bool OnMousePressed(TEngine::Events::IEvent& event) override;
-        bool OnMouseReleased(TEngine::Events::IEvent& event) override;
-        bool OnMouseDown(TEngine::Events::IEvent& event) override;
+        bool OnMousePressed(TEngine::Events::IEvent& event);
+        bool OnMouseReleased(TEngine::Events::IEvent& event);
+        // bool OnMouseDown(TEngine::Events::IEvent& event);
 
         SDL_Renderer* m_renderer;
         TEngine::Text::BitmapFont* m_font;
