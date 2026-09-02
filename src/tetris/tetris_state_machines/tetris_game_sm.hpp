@@ -37,7 +37,7 @@ namespace Tetris::States {
         void reset(void) override;
         void exit(void) override;
     private:
-        bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event) override;
+        bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event);
 
         TetrisStateMachine *m_sm_ptr;
         MainMenu* m_menu;
@@ -65,9 +65,9 @@ namespace Tetris::States {
             m_tetris_keys(tetris_keys),
             m_renderer{renderer},
             m_font{font},
-            m_keyboard_state{},
             m_begin_countdown{3},
             m_pause_countdown{0},
+            go_count{0},
             m_pause{false}
         {}
 
@@ -88,17 +88,19 @@ namespace Tetris::States {
         };
         State m_run_state;
 
-        bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event) override;
+        bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event);
 
         Game *m_game_ptr;
         TetrisStateMachine *m_parent_sm;
         Tetris::Keybinds* m_tetris_keys;
         SDL_Renderer *m_renderer;
         TEngine::Text::BitmapFont* m_font;
-        TEngine::InputHandler m_keyboard_state;
-
+        
         TEngine::Countdown m_begin_countdown;
         TEngine::Countdown m_pause_countdown;
+        
+        double go_count;
+
         bool m_pause;
     };
 

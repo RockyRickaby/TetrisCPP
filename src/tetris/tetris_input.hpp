@@ -12,15 +12,15 @@ namespace Tetris {
     class Keybinds {
     private:
         struct TetrisKeys {
-            TEngine::Key left{};
-            TEngine::Key right{};
-            TEngine::Key down{};
-            TEngine::Key rotate_clockwise{};
-            TEngine::Key rotate_counterclockwise{};
+            TEngine::Input::Keyboard::Key left{};
+            TEngine::Input::Keyboard::Key right{};
+            TEngine::Input::Keyboard::Key down{};
+            TEngine::Input::Keyboard::Key rotate_clockwise{};
+            TEngine::Input::Keyboard::Key rotate_counterclockwise{};
 
-            TEngine::Key hard_drop{};
-            TEngine::Key hold_piece{};
-            TEngine::Key pause{};
+            TEngine::Input::Keyboard::Key hard_drop{};
+            TEngine::Input::Keyboard::Key hold_piece{};
+            TEngine::Input::Keyboard::Key pause{};
         };
     public:
         enum class Settings {

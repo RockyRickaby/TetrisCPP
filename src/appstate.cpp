@@ -1,9 +1,11 @@
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_mouse.h>
 #include <filesystem>
 #include <array>
 #include <utility>
 
 #include "appstate.hpp"
+#include "engine/events.hpp"
 #include "engine/text/fonts.hpp"
 #include "engine/texture.hpp"
 #include "engine/utils.hpp"
@@ -22,7 +24,6 @@ struct Experimental {
 namespace fs = std::filesystem;
 using TetrisBag = Tetris::Bag::Standard;
 
-// TODO - improve this to handle MORE events!!
 void AppState::raise_event(SDL_Event* event) {
     if (event->type == SDL_EVENT_KEY_DOWN) {
         if (event->key.repeat) {
@@ -32,6 +33,38 @@ void AppState::raise_event(SDL_Event* event) {
             TEngine::Events::KeyPressedEvent ev{event->key.scancode};
             game_sm->event(ev);
         }
+    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        TEngine::Events::MousePressedEvent ev{
+            event->button.button,
+            event->button.x,
+            event->button.y,
+            event->button.clicks
+        };
+        game_sm->event(ev);
+    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        TEngine::Events::MouseReleasedEvent ev{
+            event->button.button,
+            event->button.x,
+            event->button.y
+        };
+        game_sm->event(ev);
+    } else if (event->type == SDL_EVENT_MOUSE_MOTION) {
+        TEngine::Events::MouseMovedEvent ev{
+            event->motion.x,
+            event->motion.y,
+            event->motion.xrel,
+            event->motion.yrel
+        };
+        game_sm->event(ev);
+    } else if (event->type == SDL_EVENT_MOUSE_WHEEL) {
+        TEngine::Events::MouseWheelEvent ev{
+            event->wheel.x,
+            event->wheel.y,
+            event->wheel.mouse_x,
+            event->wheel.mouse_y,
+            event->wheel.direction == SDL_MOUSEWHEEL_FLIPPED
+        };
+        game_sm->event(ev);
     }
 }
 
@@ -59,6 +92,8 @@ SDL_AppResult AppState::setup_app() {
     font = Text::BitmapFont::load_font(joust_font_path, 8, renderer, SDL_SCALEMODE_NEAREST, {0,0,0,255});
     // tile size for the game should be about 40 x 24
     mino_texture = TEngine::load_texture(assets_root / "mino.png", SDL_SCALEMODE_LINEAR, renderer);
+
+    tetris_keys.setup_keys(Tetris::Keybinds::Settings::Default);
     game = std::make_unique<Tetris::Game>(
         renderer,
         window_width, window_height,
@@ -66,8 +101,7 @@ SDL_AppResult AppState::setup_app() {
         &font,
         mino_texture.get()
     );
-    menu = std::make_unique<Tetris::MainMenu>(&font, renderer);
-    tetris_keys.setup_keys(Tetris::Keybinds::Settings::Default);
+    menu = std::make_unique<Tetris::MainMenu>(&font, &tetris_keys, renderer);
     // TODO - implement these main states and set them up properly
     game_sm = std::make_unique<Tetris::States::TetrisStateMachine>(
         game.get(),
@@ -107,7 +141,7 @@ SDL_AppResult AppState::setup_app() {
     
     // TODO - make this constructor explicit
     __testing->sillymodel = &silly_assets3d.load_model(
-        models_root / "pieces" / "Tpiece.obj"
+        models_root / "old" / "penger.obj"
     );
 
     // instance = {"penger", sillymodel, {0, 0, 3}, {}, TEngine::TUtils::color_from_hex("#FFDE00"), renderer, width, height};
@@ -116,7 +150,7 @@ SDL_AppResult AppState::setup_app() {
     __testing->instance.rotation = { 0, 0,0 };
     __testing->instance.color = TEngine::TUtils::color_from_hex("#B802FD");
     __testing->instance.cull_wireframe = false;
-    __testing->instance.fill = false;
+    __testing->instance.fill = true;
     __testing->instance.jitter = false;
 
     // __testing->fnt = Text::BitmapFont2::load_font(fonts_root / "JoustFont", 8, renderer, SDL_SCALEMODE_NEAREST);
@@ -129,7 +163,7 @@ static double acc = 0;
 SDL_AppResult AppState::update_and_draw() {
     using namespace TEngine;
     double delta = time.delta_time();
-    // std::cout << 1/delta << std::endl;
+    std::cout << 1/delta << std::endl;
     if (delta >= 0.1) {
         delta = 0.1;
     }
@@ -139,17 +173,17 @@ SDL_AppResult AppState::update_and_draw() {
     SDL_RenderClear(renderer);
     game_sm->draw();
 
-    // for (auto& m : pieces3dfill) {
-    //     if (m.model->name != "IpieceTri") continue;
-    //     m.rotate_y((1.0f / 2) / 2 * delta);
-    //     m.draw_geometry({}, 0.5f);
-    //     // m.draw_wireframe();
-    //     // break;
-    // }
+    for (auto& m : pieces3dfill) {
+        if (m.model->name != "TpieceTri") continue;
+        m.rotate_y((1.0f / 2) / 2 * delta);
+        // m.draw_geometry({}, 0.5f);
+        m.draw_wireframe();
+        // break;
+    }
 
     acc += delta;
     if (acc >= lim) {
-        __testing->instance.rotate_y((3.14f / 2.0f) / 2.0f * acc);
+        __testing->instance.rotate_y((1.0f / 2.0f) / 2.0f * acc);
         acc = 0;
     }
     __testing->instance.draw_instance({0,100,-100}, .5f);

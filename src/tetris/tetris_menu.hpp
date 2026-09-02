@@ -3,11 +3,12 @@
 #include "../engine/tengine.hpp"
 #include "../engine/events.hpp"
 #include "../engine/text/fonts.hpp"
+#include "tetris_input.hpp"
 
 namespace Tetris {
     class MainMenu : public TEngine::Events::EventListener {
     public:
-        MainMenu(TEngine::Text::BitmapFont* m_font, SDL_Renderer* renderer);
+        MainMenu(TEngine::Text::BitmapFont* m_font, Tetris::Keybinds* keybinds, SDL_Renderer* renderer);
         bool update(double delta_t);
         void event(TEngine::Events::IEvent& event) override;
         void draw(void);
@@ -23,10 +24,12 @@ namespace Tetris {
 
         SDL_Renderer* m_renderer;
         TEngine::Text::BitmapFont* m_font;
-        TEngine::InputHandler m_stateinput_h;
+        Tetris::Keybinds* m_keybinds;
         bool m_wants_switch;
 
         float m_offset_x = 0;
         double m_blink = 0;
+
+        bool m_read_any;
     };
 }

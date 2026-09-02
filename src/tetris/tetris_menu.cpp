@@ -5,13 +5,14 @@
 #include "../engine/text/text_renderer.hpp"
 
 namespace Tetris {
-    MainMenu::MainMenu(TEngine::Text::BitmapFont* font, SDL_Renderer* renderer) :
+    MainMenu::MainMenu(TEngine::Text::BitmapFont* font, Tetris::Keybinds* keybinds, SDL_Renderer* renderer) :
         m_renderer{renderer},
         m_font{font},
-        m_stateinput_h(),
+        m_keybinds{keybinds},
         m_wants_switch{false},
         m_offset_x{-(10.0f * m_font->tile_size())},
-        m_blink{0.75f}
+        m_blink{0.75f},
+        m_read_any{false}
     {}
     
     bool MainMenu::update(double delta_t) {
@@ -31,6 +32,9 @@ namespace Tetris {
         EventDispatcher ev{event};
         ev.dispatch<KeyPressedEvent>([this](KeyPressedEvent& f_event){ return OnKeyPressed(f_event); });
         ev.dispatch<KeyRepeatEvent>([this](KeyRepeatEvent& f_event){ return OnKeyRepeat(f_event); });
+
+        // ev.dispatch<MousePressedEvent>([](MousePressedEvent& f_event){ std::cout << f_event.button_clicks() << std::endl; return true; });
+        // ev.dispatch<MouseReleasedEvent>([](MouseReleasedEvent& f_event){ std::cout << 0 << std::endl; return true; });
     }
 
     void MainMenu::draw(void) {
@@ -55,17 +59,22 @@ namespace Tetris {
     void MainMenu::reset(void) {
         m_offset_x = -(10 * m_font->tile_size());
         m_wants_switch = false;
+        m_read_any = false;
     }
 
     bool MainMenu::OnKeyPressed(TEngine::Events::KeyPressedEvent& event) {
-        if (m_offset_x >= 720.0f / 2.0f - (10 * m_font->tile_size())) {
-            m_wants_switch = true;
+        if (!m_read_any) {
+            m_offset_x = 720.0f / 2.0f - (10 * m_font->tile_size());
+            m_read_any = true;
+        } else if (m_keybinds->keys.hold_piece.scancode == event.get_scancde()) {
+            if (m_offset_x >= 720.0f / 2.0f - (10 * m_font->tile_size())) {
+                m_wants_switch = true;
+            }
         }
-        m_offset_x = 720.0f / 2.0f - (10 * m_font->tile_size());
         return true;
     }
 
-    bool MainMenu::OnKeyReleased(TEngine::Events::KeyReleasedEvent& event) {
+    bool MainMenu::OnKeyReleased(TEngine::Events::KeyReleasedEvent&) {
         return false;
     }
 
@@ -74,15 +83,15 @@ namespace Tetris {
         return true;
     }
     
-    bool MainMenu::OnMousePressed(TEngine::Events::IEvent& event) {
+    bool MainMenu::OnMousePressed(TEngine::Events::IEvent&) {
         return false;
     }
 
-    bool MainMenu::OnMouseReleased(TEngine::Events::IEvent& event) {
+    bool MainMenu::OnMouseReleased(TEngine::Events::IEvent&) {
         return false;
     }
 
-    // bool MainMenu::OnMouseDown(TEngine::Events::IEvent& event) {
+    // bool MainMenu::OnMouseDown(TEngine::Events::IEvent&) {
     //     return false;
     // }
 }

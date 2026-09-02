@@ -1,5 +1,6 @@
 #pragma once
 
+#include <SDL3/SDL_oldnames.h>
 #include <cmath>
 #include <concepts>
 #include <cstdint>
@@ -60,65 +61,6 @@ namespace TEngine {
             return random_int(min, max);
         }
     }
-
-    // this is a very small class. you can just copy it around with no issues.
-    // use the [] operator to get the state of a key (indexed by an SDL_Scancode).
-    // it's better to just use InputHandler if all that's needed is to
-    // check the input during update, as it allows some customization as to
-    // how often and how quickly keys may fire their input when held down.
-    // Not a singleton. May be instantiated as many times as desired. It will make no difference.
-    // No memory is managed by it. The underlying keyboard pointer is managed by SDL.
-    // NOTE: SDL MUST BE INITIALIZED for any meaningful results to be returned
-    // (otherwise, every check will return false)
-    class KeyboardState {
-    public:
-        KeyboardState() { init_keyboard(); }
-        bool operator[](SDL_Scancode scancode) { return init_keyboard() ? m_keyboard[scancode] : false; }
-        bool down(SDL_Scancode scancode) { return init_keyboard() ? (*this)[scancode] : false; }
-        bool up(SDL_Scancode scancode) { return init_keyboard() ? !(*this)[scancode] : false; }
-    private:
-        static const bool* m_keyboard;
-        // returns true if the initialization was successful.
-        // may be called as many times as desired, as it will be initialized only once!
-        static bool init_keyboard();
-    };
-
-    class Key {
-    public:
-        SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
-        bool may_repeat = true;
-
-        void set_repeat_delay(double delay) { m_repeat_delay.set_countdown_time(delay); }
-        void set_repeat_interval(double interval) { m_repeat_interval.set_countdown_time(interval); }
-    private:
-        enum class KeyState {
-            Up,
-            Pressed,
-            Wait,
-            Repeat
-        };
-        Time m_timer{};
-        KeyState m_keystate{0};
-
-        Countdown m_repeat_delay{0.27, true};
-        Countdown m_repeat_interval{0.025, true};
-
-        friend class InputHandler;
-    };
-
-    // This class uses 1 byte of memory. Instantiate it as many times as you wish.
-    // This class does not manage any memory at all
-    class InputHandler {
-    public:
-        // a small state machine is implemented to handle how quickly
-        // the keys repeat when held down and how long it takes to
-        // fire the key repeatedly when first held down.
-        // you can mess around with this behavior by changing the time of timers in the Key object
-        bool may_press(Key &key);
-    private:
-        KeyboardState m_kb;
-        bool may_press_state(Key &key, KeyboardState kb);
-    };
 
     // NOTE: already available in SDL as SDL_Color
     // Components are unsigned 8 bit integers (very lightweight!!)
@@ -224,4 +166,73 @@ namespace TEngine {
 
         friend std::ostream& operator<<(std::ostream& output, const Vec3& v);
     };
+
+    // NOTE: SDL MUST hae been initialized prior to calling ANY function
+    // in these namespaces
+    namespace Input {
+        namespace Keyboard {
+            class Key {
+            public:
+                SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
+                bool may_repeat = true;
+
+                void set_repeat_delay(double delay) { m_repeat_delay.set_countdown_time(delay); }
+                void set_repeat_interval(double interval) { m_repeat_interval.set_countdown_time(interval); }
+            private:
+                enum class KeyState {
+                    Up,
+                    Pressed,
+                    Wait,
+                    Repeat
+                };
+                Time m_timer{};
+                KeyState m_keystate{0};
+
+                Countdown m_repeat_delay{0.27, true};
+                Countdown m_repeat_interval{0.025, true};
+
+                friend class InputHandler;
+                friend bool may_press(Key&);
+                // may_press could be a method instead of a free function, but I feel it makes more sense
+                // for it to be a free function
+            };
+            // returns true if a key is currently registering a press. returns false otherwise.
+            // a return value of false might also indicate that SDL hasn't been initialized yet
+            bool may_press(Key& k);
+            // returns true if a key is being held down. returns false otherwise.
+            // a return value of false might also indicate that SDL hasn't been initialized yet
+            bool is_down(SDL_Scancode key);
+            // returns true if a key is currently not being pressed. returns false otherwise.
+            // a return value of false might also indicate that SDL hasn't been initialized yet
+            bool is_up(SDL_Scancode key);
+        }
+
+        namespace Mouse {
+            enum class MButtons {
+                Left = SDL_BUTTON_LEFT,
+                Middle = SDL_BUTTON_MIDDLE,
+                Right = SDL_BUTTON_RIGHT,
+                SideButton1 = SDL_BUTTON_X1,
+                SideButton2 = SDL_BUTTON_X2,
+            };
+
+            // returns true if the left mouse button is currently registering a press. returns false otherwise.
+            // a return value of false might also indicate that SDL hasn't been initialized yet
+            bool left_button_down(void);
+            // returns true if if the middle mouse button is currently registering a press. returns false otherwise.
+            // a return value of false might also indicate that SDL hasn't been initialized yet
+            bool middle_button_down(void);
+            // returns true if if the right mouse button is currently registering a press. returns false otherwise.
+            // a return value of false might also indicate that SDL hasn't been initialized yet
+            bool right_button_down(void);
+            // returns true if a mouse button is currently registering a press. returns false otherwise.
+            // a return value of false might also indicate that SDL hasn't been initialized yet
+            bool is_button_down(MButtons button);
+
+            // returns the position of the mouse relative to the window
+            Vec2 position();
+            // returns the difference between mouse positions since the last frame.
+            Vec2 delta();
+        }
+    }
 }

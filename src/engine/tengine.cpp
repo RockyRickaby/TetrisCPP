@@ -6,7 +6,7 @@ namespace TEngine {
     // convenience if we don't want to create a new Random instance every time
     // we need a random number 
     static Random rnd;
-    const bool* KeyboardState::m_keyboard = nullptr;
+    // const bool* KeyboardState::m_keyboard = nullptr;
 
     int random_int(int min, int max) {
         return rnd.draw_int(min, max);
@@ -14,13 +14,6 @@ namespace TEngine {
 
     float random_float(float min, float max) {
         return rnd.draw_float(min, max);
-    }
-
-    bool KeyboardState::init_keyboard() {
-        if (m_keyboard == nullptr && SDL_WasInit(SDL_INIT_VIDEO)) {
-            m_keyboard = SDL_GetKeyboardState(nullptr);
-        }
-        return m_keyboard != nullptr; // will be true if initialized
     }
 
     Time::Time() :
@@ -63,67 +56,118 @@ namespace TEngine {
         m_time_counter = m_time_delta;
     }
 
-    bool InputHandler::may_press(Key &key) {
-        return may_press_state(key, m_kb);
-    }
+    namespace Input {
+        namespace Keyboard {
+            static const bool* keyboard = nullptr;
 
-    bool InputHandler::may_press_state(Key &key, KeyboardState kb) {
-        switch (key.m_keystate) {
-            case Key::KeyState::Up: {
-                if (kb.down(key.scancode)) {
-                    key.m_keystate = Key::KeyState::Pressed;
-                    return true;
+            static bool init_keyboard() {
+                if (keyboard == nullptr && SDL_WasInit(SDL_INIT_VIDEO)) {
+                    keyboard = SDL_GetKeyboardState(nullptr);
                 }
-            }; break;
-            case Key::KeyState::Pressed: {
-                if (kb.down(key.scancode)) {
-                    if (!key.may_repeat) {
+                return keyboard != nullptr;
+            }
+
+            bool is_down(SDL_Scancode key) { return init_keyboard() ? keyboard[key] : false; }
+            bool is_up(SDL_Scancode key) { return init_keyboard() ? !keyboard[key] : false; }
+
+            bool may_press(Key& key) {
+                if (!init_keyboard()) {
+                    return false;
+                }
+                switch (key.m_keystate) {
+                    case Key::KeyState::Up: {
+                        if (is_down(key.scancode)) {
+                            key.m_keystate = Key::KeyState::Pressed;
+                            return true;
+                        }
+                    }; break;
+                    case Key::KeyState::Pressed: {
+                        if (is_down(key.scancode)) {
+                            if (!key.may_repeat) {
+                                return false;
+                            }
+                            if (key.m_repeat_delay.get_countdown_time() <= 0) {
+                                key.m_keystate = Key::KeyState::Repeat;
+                                return false;
+                            }
+                            key.m_keystate = Key::KeyState::Wait;
+                            key.m_repeat_delay.done(key.m_timer.delta_time());
+                            // if delay == 0, just jump to repeat state
+                        } else {
+                            key.m_keystate = Key::KeyState::Up;
+                            key.m_repeat_delay.reset();
+                            key.m_repeat_interval.reset();
+                        }
                         return false;
-                    }
-                    if (key.m_repeat_delay.get_countdown_time() <= 0) {
-                        key.m_keystate = Key::KeyState::Repeat;
+                    }; break;
+                    case Key::KeyState::Wait: {
+                        if (is_down(key.scancode)) {
+                            if (!key.m_repeat_delay.done(key.m_timer.delta_time())) {
+                                return false;
+                            }
+                            key.m_keystate = Key::KeyState::Repeat;
+                            return true;
+                        } else {
+                            key.m_keystate = Key::KeyState::Up;
+                            key.m_repeat_delay.reset();
+                            key.m_repeat_interval.reset();
+                            return false;
+                        }
+                    }; break;
+                    case Key::KeyState::Repeat: {
+                        if (is_up(key.scancode)) {
+                            key.m_keystate = Key::KeyState::Up;
+                            key.m_repeat_delay.reset();
+                            key.m_repeat_interval.reset();
+                            return false;
+                        } else if (!key.m_repeat_interval.done(key.m_timer.delta_time())) {
+                            return false;
+                        } else {
+                            return true;
+                        }
+                    }; break;
+                    default:
                         return false;
-                    }
-                    key.m_keystate = Key::KeyState::Wait;
-                    key.m_repeat_delay.done(key.m_timer.delta_time());
-                    // if delay == 0, just jump to repeat state
-                } else {
-                    key.m_keystate = Key::KeyState::Up;
-                    key.m_repeat_delay.reset();
-                    key.m_repeat_interval.reset();
                 }
                 return false;
-            }; break;
-            case Key::KeyState::Wait: {
-                if (kb.down(key.scancode)) {
-                    if (!key.m_repeat_delay.done(key.m_timer.delta_time())) {
-                        return false;
-                    }
-                    key.m_keystate = Key::KeyState::Repeat;
-                    return true;
-                } else {
-                    key.m_keystate = Key::KeyState::Up;
-                    key.m_repeat_delay.reset();
-                    key.m_repeat_interval.reset();
-                    return false;
-                }
-            }; break;
-            case Key::KeyState::Repeat: {
-                if (kb.up(key.scancode)) {
-                    key.m_keystate = Key::KeyState::Up;
-                    key.m_repeat_delay.reset();
-                    key.m_repeat_interval.reset();
-                    return false;
-                } else if (!key.m_repeat_interval.done(key.m_timer.delta_time())) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }; break;
-            default:
-                return false;
+            }
         }
-        return false;
+
+        namespace Mouse {
+
+            static bool init_mouse() {
+                return SDL_WasInit(SDL_INIT_VIDEO);
+            }
+            bool left_button_down(void) { return is_button_down(MButtons::Left); }
+            bool middle_button_down(void) { return is_button_down(MButtons::Middle); }
+            bool right_button_down(void) { return is_button_down(MButtons::Right); }
+
+            bool is_button_down(MButtons button) {
+                if (!init_mouse()) {
+                    return false;
+                }
+                SDL_MouseButtonFlags buttons = SDL_GetMouseState(nullptr, nullptr);
+                return buttons & SDL_BUTTON_MASK(static_cast<int>(button));
+            }
+
+            Vec2 position() {
+                if (!init_mouse()) {
+                    return {};
+                }
+                float x, y;
+                [[maybe_unused]] SDL_MouseButtonFlags v = SDL_GetMouseState(&x, &y);
+                return {x, y};
+            }
+
+            Vec2 delta() {
+                if (!init_mouse()) {
+                    return {};
+                }
+                float x, y;
+                [[maybe_unused]] SDL_MouseButtonFlags v = SDL_GetRelativeMouseState(&x, &y);
+                return {x, y};
+            }
+        }
     }
 
     bool Color::operator==(const Color other) const {

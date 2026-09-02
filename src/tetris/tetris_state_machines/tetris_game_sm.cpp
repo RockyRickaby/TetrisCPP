@@ -23,9 +23,10 @@ namespace Tetris::States {
 
     // TODO - forward events to MainMenu instance (state-changin is triggered by checking if m_wants_switch is set)
     void MenuState::event(TEngine::Events::IEvent& event) {
-        using namespace TEngine::Events;
-        EventDispatcher ed{event};
-        ed.dispatch<KeyPressedEvent>([this](KeyPressedEvent& ev){ return OnKeyPressed(ev); });
+        // using namespace TEngine::Events;
+        // EventDispatcher ed{event};
+        // ed.dispatch<KeyPressedEvent>([this](KeyPressedEvent& ev){ return OnKeyPressed(ev); });
+        m_menu->event(event);
     }
 
 
@@ -46,15 +47,15 @@ namespace Tetris::States {
 
     bool MenuState::OnKeyPressed(TEngine::Events::KeyPressedEvent& event) {
         // if (m_tetris_keys->keys.hold_piece.scancode == event.get_scancde()) {
-        if ((m_tetris_keys->any_match(event.get_scancde()) && m_read_any) || m_tetris_keys->keys.hold_piece.scancode == event.get_scancde()) {
-            m_menu->event(event);
-            // if (m_menu->wants_switch_state()) {
-            //     m_sm_ptr->switch_to(STATE_TETRIS);
-            // }
-            m_read_any = false;
-            return true;
-        }
-        return false;
+        m_menu->event(event);
+        // if ((m_tetris_keys->any_match(event.get_scancde()) && m_read_any) || m_tetris_keys->keys.hold_piece.scancode == event.get_scancde()) {
+        //     m_menu->event(event);
+        //     // if (m_menu->wants_switch_state()) {
+        //     //     m_sm_ptr->switch_to(STATE_TETRIS);
+        //     // }
+        //     m_read_any = false;
+        // }
+        return event.handled;
     }
 
 
@@ -68,6 +69,7 @@ namespace Tetris::States {
         m_pause_countdown.set_countdown_time(0);
         m_pause = false;
         m_run_state = State::Begin;
+        go_count = 0;
     }
 
     void RunGameState::update(double delta_t) {
@@ -81,23 +83,27 @@ namespace Tetris::States {
             return;
         }
 
+        go_count += delta_t;
+        go_count = go_count > 1 ? 1 : go_count;
+
         const auto read_input = [this]() {
             using namespace TEngine;
+            using namespace TEngine::Input;
             using Tetrimino::Rotation;
 
             Vec2 dir{};
             Rotation rot{};
-            if (m_keyboard_state.may_press(m_tetris_keys->keys.left)) {
+            if (Keyboard::may_press(m_tetris_keys->keys.left)) {
                 dir = Vec2{-1,0};
-            } else if (m_keyboard_state.may_press(m_tetris_keys->keys.right)) {
+            } else if (Keyboard::may_press(m_tetris_keys->keys.right)) {
                 dir = Vec2{1,0};
-            } else if (m_keyboard_state.may_press(m_tetris_keys->keys.down)) {
+            } else if (Keyboard::may_press(m_tetris_keys->keys.down)) {
                 dir = Vec2{0,-1};
             }
             
-            if (m_keyboard_state.may_press(m_tetris_keys->keys.rotate_clockwise)) {
+            if (Keyboard::may_press(m_tetris_keys->keys.rotate_clockwise)) {
                 rot = Rotation::Clockwise;
-            } else if (m_keyboard_state.may_press(m_tetris_keys->keys.rotate_counterclockwise)) {
+            } else if (Keyboard::may_press(m_tetris_keys->keys.rotate_counterclockwise)) {
                 rot = Rotation::Counterclockwise;
             }
 
@@ -124,9 +130,15 @@ namespace Tetris::States {
         float scale = 5;
         if (m_begin_countdown.get_time_left() > 0) {
             TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_begin_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale);
+        } else if (go_count < 1) {
+            const char go[] = "go!";
+            size_t twid = sizeof(go) - 1;
+            // scale = 5;
+            TEngine::Text::BitmapFontRenderer::draw_string(m_font, go, (960 - twid * m_font->tile_size() * scale) / 2.0f, (720 - m_font->tile_size() * scale) / 2.0f, scale);
         }
 
         if (m_pause) {
+            go_count = 1;
             const char pause[] = "pause";
             size_t twid = sizeof(pause) - 1;
             // scale = 5;

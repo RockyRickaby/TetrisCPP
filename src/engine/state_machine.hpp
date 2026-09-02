@@ -10,7 +10,7 @@
 // TODO - reduce indirection a little
 namespace TEngine::StateMachine {
     // State base class to be used for classes (states) that may be used by a StateMachine
-    class State : public Events::EventListenerFunctions, public Events::EventListener {
+    class State : public Events::EventListener {
     public:
         virtual void enter(void) {}
         // the double argument is for the delta_time
@@ -22,7 +22,7 @@ namespace TEngine::StateMachine {
         virtual ~State() = default;
     };
 
-    class StateMachine : public Events::EventListenerFunctions, public Events::EventListener {
+    class StateMachine : public Events::EventListener {
     public:
         virtual void update(double delta) = 0;
         virtual void draw(void) = 0;

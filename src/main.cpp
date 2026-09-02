@@ -22,17 +22,18 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
     } else if (event->type == SDL_EVENT_KEY_DOWN) {
-        if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_Q) {
+        if (event->key.key == SDLK_Q) {
             return SDL_APP_SUCCESS;
         }
-    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-        // event->button.button == SDL_BUTTON_RIGHT;
-        std::cout << TEngine::Vec2{event->button.x,event->button.y} << std::endl;
-    } else if (event->type == SDL_EVENT_MOUSE_MOTION) {
-        std::cout << TEngine::Vec2{event->motion.xrel,event->motion.yrel} << std::endl;
-    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
-        // event->button.
     }
+    // else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+    //     // event->button.button == SDL_BUTTON_RIGHT;
+    //     std::cout << TEngine::Vec2{event->button.x,event->button.y} << std::endl;
+    // } else if (event->type == SDL_EVENT_MOUSE_MOTION) {
+    //     std::cout << TEngine::Vec2{event->motion.xrel,event->motion.yrel} << std::endl;
+    // } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
+    //     // event->button.
+    // }
     state->raise_event(event);
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }

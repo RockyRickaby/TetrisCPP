@@ -20,7 +20,7 @@ namespace TEngine {
         enum class EventType {
             None = 0,
             KeyPressed, KeyDown, KeyReleased,
-            MousePressed, MouseDown, MouseReleased, MouseMoved,
+            MousePressed, MouseReleased, MouseMoved, MouseWheel
         };
 
         // TODO - maybe reduce the object-orientation of this
@@ -66,14 +66,16 @@ namespace TEngine {
 
         class MousePressedEvent : public IEvent {
         public:
-            MousePressedEvent(int mouse_button, float x, float y) :
+            MousePressedEvent(int mouse_button, float x, float y, int clicks) :
                 m_button{mouse_button},
                 m_x{x},
-                m_y{y}
+                m_y{y},
+                m_clicks{clicks}
             {}
 
             bool right_button_pressed() const { return m_button == SDL_BUTTON_RIGHT; }
             bool left_button_pressed() const { return m_button == SDL_BUTTON_LEFT; }
+            int button_clicks() const { return m_clicks; }
             Vec2 get_position() const { return { m_x, m_y }; }
 
             EVENT_CLASS_TYPE(MousePressed)
@@ -81,6 +83,8 @@ namespace TEngine {
             int m_button;
             float m_x;
             float m_y;
+
+            int m_clicks;
         };
 
         class MouseReleasedEvent : public IEvent {
@@ -122,6 +126,29 @@ namespace TEngine {
             float m_dy;
         };
 
+        class MouseWheelEvent : public IEvent {
+        public:
+            MouseWheelEvent(float scroll_dx, float scroll_dy, float pos_x, float pos_y, bool flipped) :
+                m_x{pos_x},
+                m_y{pos_y},
+                m_dx{scroll_dx},
+                m_dy{scroll_dy},
+                m_flipped{flipped}
+            {}
+
+            Vec2 get_position() const { return { m_x, m_y }; }
+            Vec2 get_scroll_dir() const { return { m_dx, m_dy}; }
+            bool is_flipped() const { return m_flipped; }
+
+            EVENT_CLASS_TYPE(MouseWheel)
+        private:
+            float m_x;
+            float m_y;
+            float m_dx;
+            float m_dy;
+            bool m_flipped;
+        };
+
         // handful abstract class for implementing event methods
         class EventListener {
         public:
@@ -138,20 +165,22 @@ namespace TEngine {
             virtual bool OnKeyRepeat(KeyRepeatEvent&) { return false; }
 
             // mouse events
-            // TODO - implement these events
             virtual bool OnMousePressed(MousePressedEvent&) { return false; }
             virtual bool OnMouseReleased(MouseReleasedEvent&) { return false; }
             virtual bool OnMouseMoved(MouseMovedEvent&) { return false; }
+            virtual bool OnMouseScroll(MouseWheelEvent&) { return false; };
         };
 
+        template<typename FN, typename EventType>
+        concept DispatcherCallback = requires(FN fn, EventType& ev) {
+            { fn(ev) } -> std::same_as<bool>;
+        } && std::is_base_of_v<IEvent, EventType>;
+
         class EventDispatcher final {
-        private:
-            template<typename T>
-            using EventCallback = std::function<bool(T&)>;
         public:
             EventDispatcher(IEvent& event) : m_event{event} {}
-            template<typename EventType> requires(std::is_base_of_v<IEvent, EventType>)
-            bool dispatch(EventCallback<EventType> f) {
+            template<typename EventType, DispatcherCallback<EventType> EventCallback> requires(std::is_base_of_v<IEvent, EventType>)
+            bool dispatch(EventCallback f) {
                 if (m_event.get_event_type() == EventType::get_static_type() && !m_event.handled) {
                     m_event.handled = f(*dynamic_cast<EventType*>(&m_event));
                     return true;
@@ -173,7 +202,6 @@ namespace TEngine {
         class CustomEventsDispatcher final {
         private:
             using EventCallback = std::function<bool(const ICustomEvent*)>;
-            using ListenerHandle = std::uint64_t;
         public:
             CustomEventsDispatcher() : queue{}, m_event_callbacks{} {}
 
