@@ -151,11 +151,11 @@ namespace TEngine::Silly3D {
 
     // better for dynamic geometry (in terms of memory usage, not necessarily performance)
     struct SillyInstance3D {
-        SillyModel* model;
-        SillyMaterial* material;
-        Vec3 position;
-        Vec3 rotation;
-        Color color;
+        SillyModel* model = nullptr;
+        SillyMaterial* material = nullptr;
+        Vec3 position{};
+        Vec3 rotation{};
+        Color color{};
 
         int m_window_w = 0;
         int m_window_h = 0;

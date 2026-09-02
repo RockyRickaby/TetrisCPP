@@ -470,7 +470,7 @@ namespace TEngine::Silly3D {
         std::vector<Vec2> text_uv;
         std::vector<std::tuple<int,int,int>> indices;
 
-        SillyMaterial* mat;
+        SillyMaterial* mat = nullptr;
         int face_len = 0;
         while(std::getline(fs, line)) {
             std::istringstream iss{line};
@@ -723,8 +723,8 @@ static inline SDL_FColor get_flat_specular(const std::vector<TEngine::Vec3>& fac
     auto V = (TEngine::Vec3{} - face[0]).normalize();
 
     float dotNL = N.dot(L);
-    float dotNV = N.dot(V);
-    float dotVL = V.dot(L);
+    // float dotNV = N.dot(V);
+    // float dotVL = V.dot(L);
 
     auto K = (N * -2 * dotNL + L).normalize();
     // float res = std::pow(2 * dotNL * dotNV - dotVL, 100);
