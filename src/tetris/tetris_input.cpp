@@ -1,6 +1,5 @@
 #include <SDL3/SDL_scancode.h>
 #include <array>
-// #include <iostream>
 #include "tetris_input.hpp"
 
 namespace Tetris {
@@ -8,7 +7,7 @@ namespace Tetris {
         SDL_Scancode rotccw = SDL_SCANCODE_D;
         SDL_Scancode rotcw = SDL_SCANCODE_F; 
         SDL_Scancode hold = SDL_SCANCODE_SPACE;
-        SDL_Scancode pause = SDL_SCANCODE_P;
+        SDL_Scancode pause = SDL_SCANCODE_ESCAPE;
         if (bind_settings == Settings::Default) {
             keys.left.scancode = SDL_SCANCODE_LEFT;
             keys.right.scancode = SDL_SCANCODE_RIGHT;
