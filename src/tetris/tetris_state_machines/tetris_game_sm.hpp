@@ -1,11 +1,13 @@
 #pragma once
 
 #include <SDL3/SDL.h>
+#include <span>
 
 #include "../../engine/state_machine.hpp"
 // #include "../../engine/tengine.hpp"
 #include "../../engine/events.hpp"
 #include "../../engine/text/fonts.hpp"
+#include "../tetris_scoreboard.hpp"
 #include "../tetris_game.hpp"
 #include "../tetris_input.hpp"
 #include "../tetris_menu.hpp"
@@ -19,7 +21,15 @@ namespace Tetris::States {
 
     class MenuState final : public TEngine::StateMachine::State {
     public:
-        MenuState(TetrisStateMachine *sm, MainMenu* menu, Tetris::Keybinds* tetris_keys, SDL_Renderer *renderer, TEngine::Text::BitmapFont* font) :
+        MenuState(
+            TetrisStateMachine *sm,
+            Game* game,
+            MainMenu* menu,
+            Tetris::Keybinds* tetris_keys,
+            SDL_Renderer *renderer,
+            TEngine::Text::BitmapFont* font
+        ) :
+            m_game_ptr{game},
             m_sm_ptr{sm},
             m_menu{menu},
             m_tetris_keys(tetris_keys),
@@ -39,12 +49,13 @@ namespace Tetris::States {
     private:
         bool OnKeyPressed(TEngine::Events::KeyPressedEvent& event);
 
+        Game *m_game_ptr;
         TetrisStateMachine *m_sm_ptr;
         MainMenu* m_menu;
         Tetris::Keybinds *m_tetris_keys;
         TEngine::Text::BitmapFont* m_font;
         SDL_Renderer *m_renderer;
-        double tmp_counter;
+        TEngine::OneShotTimer tmp_counter;
         bool m_read_any;
     };
 
@@ -67,7 +78,7 @@ namespace Tetris::States {
             m_font{font},
             m_begin_countdown{3},
             m_pause_countdown{0},
-            go_count{0},
+            m_go_count{1},
             m_pause{false}
         {}
 
@@ -99,7 +110,7 @@ namespace Tetris::States {
         TEngine::Countdown m_begin_countdown;
         TEngine::Countdown m_pause_countdown;
         
-        double go_count;
+        TEngine::OneShotTimer m_go_count;
 
         bool m_pause;
     };
@@ -114,24 +125,52 @@ namespace Tetris::States {
 
     class GameOverState final : public TEngine::StateMachine::State {
     public:
-        GameOverState(TetrisStateMachine *sm, SDL_Renderer *renderer, TEngine::Text::BitmapFont* font) :
+        GameOverState(TetrisStateMachine *sm, Game* game, SDL_Renderer *renderer, TEngine::Text::BitmapFont* font, Score::Leaderboard& leaderboard, std::span<Tetris::Piece3D> blocks_wireframe) :
+            m_has_highscore(false),
+            m_game_ptr{game},
             m_sm_ptr{sm},
             // m_input_event_handler(input_event_h),
             m_font{font},
-            m_renderer{renderer}
+            m_blocks_wireframe{blocks_wireframe},
+            m_block{m_blocks_wireframe.begin()},
+            m_renderer{renderer},
+            m_gameover_text_pos{},
+            m_newscore_text_pos{},
+            m_leaderboard_offset{},
+            m_gameover_timer(0),
+            m_highscore_delay{0},
+            m_leaderboard_transition_delay{0},
+            m_leaderboard(leaderboard),
+            m_blocks_framerate(1.0f/20.0f, true),
+            m_switch_block{1.5f, true}
         {}
 
         void enter(void) override;
         void update(double delta_t) override;
+        void event(TEngine::Events::IEvent& event) override;
         // void handle_input(void) override;
         void draw(void) override;
         void reset(void) override;
         void exit(void) override;
     private:
+        bool m_has_highscore;
+        Game *m_game_ptr;
         TetrisStateMachine *m_sm_ptr;
         TEngine::Text::BitmapFont* m_font;
+        std::span<Tetris::Piece3D> m_blocks_wireframe;
+        std::span<Tetris::Piece3D>::reverse_iterator m_block;
         SDL_Renderer *m_renderer;
-        double tmp_counter = 5;
+        TEngine::Vec2 m_gameover_text_pos;
+        TEngine::Vec2 m_newscore_text_pos;
+        TEngine::Vec2 m_leaderboard_offset;
+        TEngine::OneShotTimer m_gameover_timer;
+        TEngine::OneShotTimer m_highscore_delay;
+        TEngine::OneShotTimer m_leaderboard_transition_delay;
+        Score::Leaderboard m_leaderboard;
+        Score::InMemoryLeaderboard m_lb_storage;
+
+        TEngine::Countdown m_blocks_framerate;
+        TEngine::Countdown m_switch_block;
     };
 
 
@@ -150,7 +189,10 @@ namespace Tetris::States {
             Tetris::MainMenu* menu_ptr,
             SDL_Renderer* renderer,
             Tetris::Keybinds* tetris_keys,
-            TEngine::Text::BitmapFont* font
+            TEngine::Text::BitmapFont* font,
+            Score::Leaderboard& leaderboard,
+            std::span<Tetris::Piece3D> blocks_wireframe,
+            std::span<Tetris::Piece3D> blocks_filled
         );
         void update(double delta_t) override;
         // void handle_input(void) override { m_current->handle_input(); }
@@ -166,6 +208,9 @@ namespace Tetris::States {
 
         std::array<TEngine::StateMachine::State*, 3> m_states;
         TEngine::StateMachine::State* m_current;
+        // maybe we'll use these
+        std::span<Tetris::Piece3D> m_blocks_wireframe;
+        std::span<Tetris::Piece3D> m_blocks_filled;
         bool m_switching;
         int m_next;
     };

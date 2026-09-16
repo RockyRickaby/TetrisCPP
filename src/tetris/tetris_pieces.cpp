@@ -8,6 +8,9 @@
 #include "tetris_pieces.hpp"
 #include "../engine/utils.hpp"
 
+static_assert(std::is_copy_assignable_v<Tetris::Tetrimino::Piece>);
+static_assert(std::is_move_assignable_v<Tetris::Tetrimino::Piece>);
+
 namespace Tetris {
     namespace Tetrimino {
         Piece::Piece() :
@@ -124,6 +127,3 @@ namespace Tetris {
         };
     }
 }
-
-static_assert(std::is_copy_assignable_v<Tetris::Tetrimino::Piece>);
-static_assert(std::is_move_assignable_v<Tetris::Tetrimino::Piece>);

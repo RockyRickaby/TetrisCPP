@@ -1,5 +1,5 @@
 #include <SDL3/SDL_surface.h>
-#include <vector>
+#include <format>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -8,14 +8,9 @@
 #include "fonts.hpp"
 
 namespace TEngine::Text {
-    void BitmapFont::render_char(char c, float offset_x, float offset_y, float scale) {
-        m_atlas.render(static_cast<int>(c), offset_x, offset_y, scale);
+    void BitmapFont::draw_char(char c, float offset_x, float offset_y, float scale, float angle, TextFlipMode flipmode) {
+        m_atlas.draw(static_cast<int>(c), offset_x, offset_y, scale, angle, flipmode);
     }
-
-    BitmapFont::BitmapFont(Sprites::SpriteAtlas&& atlas, int tile_size) :
-        m_atlas{std::move(atlas)},
-        m_tile_size{tile_size}
-    {}
 
     BitmapFont::BitmapFont(BitmapFont&& other) noexcept :
         m_atlas(std::move(other.m_atlas)),
@@ -27,11 +22,12 @@ namespace TEngine::Text {
         std::ifstream fs;
         fs.open(filepath);
         if (!fs.is_open()) {
-            throw std::runtime_error(std::string{"could not find path: "} + filepath.string());
+            throw std::runtime_error(std::format("could not find path: {}", filepath.string()));
         }
 
         std::string line;
-        Sprites::SpriteAtlas spr;
+        BitmapFont fnt;
+        fnt.m_tile_size = tile_size;
         while (std::getline(fs, line)) {
             std::istringstream iss{line};
             std::string data;
@@ -39,7 +35,7 @@ namespace TEngine::Text {
             iss >> data;
             if (data == "atlas") {
                 iss >> data;
-                spr = Sprites::SpriteAtlas(filepath.parent_path() / data, tile_size, tile_size, renderer, scale_mode, key);
+                fnt.m_atlas = Sprites::SpriteAtlas(filepath.parent_path() / data, tile_size, tile_size, renderer, scale_mode, key);
             } else if (data == "m") {
                 char ch;
                 int x;
@@ -47,19 +43,17 @@ namespace TEngine::Text {
                 iss >> ch;
                 iss >> x;
                 iss >> y;
-                spr.insert_offsets(static_cast<int>(ch), x, y);
+                fnt.m_atlas.insert_offsets(static_cast<int>(ch), x, y);
             } else if (data == "b") {
                 char ch = ' ';
                 int x;
                 int y;
                 iss >> x;
                 iss >> y;
-                spr.insert_offsets(static_cast<int>(ch), x, y);
-            } else {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "ignoring line %s.", line.c_str());
+                fnt.m_atlas.insert_offsets(static_cast<int>(ch), x, y);
             }
         }
-        return {std::move(spr), tile_size};
+        return fnt;
     }
 
     BitmapFont& BitmapFont::operator=(BitmapFont other) {

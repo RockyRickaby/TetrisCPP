@@ -8,10 +8,12 @@ set(PROJECT_SOURCES
     src/tetris/tetris_game.cpp
     src/tetris/tetris_menu.cpp
     src/tetris/tetris_pieces.cpp
+    src/tetris/tetris_piece3d.cpp
     src/tetris/tetris_kicks.cpp
     src/tetris/tetris_utils.cpp
     src/tetris/tetris_bags.cpp
     src/tetris/tetris_input.cpp
+    src/tetris/tetris_scoreboard.cpp
     src/tetris/tetris_state_machines/tetris_game_sm.cpp
     src/engine/tengine.cpp
     src/engine/texture.cpp
@@ -75,9 +77,6 @@ target_compile_options(${TARGET_MAIN} PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 
-# target_compile_features(${TARGET_MAIN} PUBLIC ${needed_features})
-target_link_libraries(${TARGET_MAIN} PRIVATE SDL3::SDL3)
-
 if(WIN32)
     add_custom_command(TARGET ${TARGET_MAIN} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -85,7 +84,10 @@ if(WIN32)
             $<TARGET_FILE_DIR:${TARGET_MAIN}>
         COMMAND_EXPAND_LISTS
     )
+else()
 endif()
+
+target_link_libraries(${TARGET_MAIN} PRIVATE SDL3::SDL3)
 
 add_custom_command(TARGET ${TARGET_MAIN} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

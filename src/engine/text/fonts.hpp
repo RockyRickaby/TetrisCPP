@@ -4,20 +4,21 @@
 #include "../sprites/sprites.hpp"
 
 namespace TEngine::Text {
+    using TextFlipMode = Sprites::SpriteFlipMode;
+
     class BitmapFont {
     public:
         virtual ~BitmapFont() = default;
+        static BitmapFont load_font(const std::filesystem::path& filepath, int tile_size, SDL_Renderer* renderer, SDL_ScaleMode scale_mode, Color key);
 
         BitmapFont() = default;
         // move pre-configured atlas 
-        BitmapFont(Sprites::SpriteAtlas&& atlas, int tile_size);
+        // BitmapFont(Sprites::SpriteAtlas&& atlas, int tile_size);
         BitmapFont(BitmapFont&& other) noexcept;
  
         int tile_size() { return m_tile_size; }
         SDL_Renderer* get_renderer(void) { return m_atlas.get_renderer(); }
-        void render_char(char c, float offset_x, float offset_y, float scale);
-        
-        static BitmapFont load_font(const std::filesystem::path& filepath, int tile_size, SDL_Renderer* renderer, SDL_ScaleMode scale_mode, Color key);
+        void draw_char(char c, float offset_x, float offset_y, float scale, float angle = 0, TextFlipMode flipmode = {});
         
         BitmapFont& operator=(BitmapFont other);
         friend void swap(BitmapFont& fst, BitmapFont& snd) {

@@ -1,19 +1,67 @@
+#include <SDL3/SDL_log.h>
 #include <algorithm>
 #include <format>
 #include "tengine.hpp"
 
 namespace TEngine {
-    // convenience if we don't want to create a new Random instance every time
-    // we need a random number 
+    // convenience if we don't want to create a new Random instance
+    // every time we need a random number 
     static Random rnd;
-    // const bool* KeyboardState::m_keyboard = nullptr;
+
+    bool init(const AppMetadata& metadata) {
+        SDL_SetAppMetadata(metadata.name, metadata.version, metadata.identifier);
+        if (!SDL_Init(SDL_INIT_VIDEO)) {
+            SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
+            return false;
+        }
+        return true;
+    }
+
+    bool init_window(Window& window) {
+        if (!SDL_CreateWindowAndRenderer(
+            window.window_name.c_str(),
+            window.width,
+            window.height,
+            window.window_flags,
+            &window.window,
+            &window.renderer
+        )) {
+            SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
+            return false;
+        }
+        SDL_Log("Driver: %s\n", SDL_GetRendererName(window.renderer));
+        SDL_SetRenderVSync(window.renderer, window.vsync);
+        if (window.use_logical_window_size) {
+            if (window.logical_width > 0 && window.logical_height > 0) {
+                SDL_SetRenderLogicalPresentation(
+                    window.renderer,
+                    window.logical_width,
+                    window.logical_height,
+                    window.logical_window_mode
+                );
+            } else {
+                SDL_LogWarn(
+                    SDL_LOG_CATEGORY_APPLICATION,
+                    "logical size is invalid (%d, %d). ignoring use_logical_window_size",
+                    window.logical_width,
+                    window.logical_height
+                );
+            }
+        }
+        return true;
+    }
+
+    void end_window(Window& window) {
+        SDL_DestroyRenderer(window.renderer);
+        SDL_DestroyWindow(window.window);
+    }
 
     int random_int(int min, int max) {
-        return rnd.draw_int(min, max);
+        return rnd.get_int(min, max);
     }
 
     float random_float(float min, float max) {
-        return rnd.draw_float(min, max);
+        return rnd.get_float(min, max);
     }
 
     Time::Time() :
@@ -30,17 +78,16 @@ namespace TEngine {
 
     Countdown::Countdown(double count, bool autoreset) :
         autoreset{autoreset},
-        m_time_counter{count},
+        m_timer{count},
         m_time_delta{count}
     {}
 
     bool Countdown::done(double delta_t) {
-        m_time_counter -= delta_t;
-        if (m_time_counter <= 0) {
+        if (m_timer.done(delta_t)) {
             if (autoreset) {
                 reset();
             } else {
-                m_time_counter = 0; // unlikely to happen, but prevent the value from getting tooooooo small
+                m_timer.time = 0; // unlikely to happen, but prevent the value from getting tooooooo small
             }
             return true;
         }
@@ -53,7 +100,7 @@ namespace TEngine {
     }
 
     void Countdown::reset(void) {
-        m_time_counter = m_time_delta;
+        m_timer.time = m_time_delta;
     }
 
     namespace Input {
@@ -70,7 +117,7 @@ namespace TEngine {
             bool is_down(SDL_Scancode key) { return init_keyboard() ? keyboard[key] : false; }
             bool is_up(SDL_Scancode key) { return init_keyboard() ? !keyboard[key] : false; }
 
-            bool may_press(Key& key) {
+            bool may_press(Key& key, double delta_time) {
                 if (!init_keyboard()) {
                     return false;
                 }
@@ -91,7 +138,7 @@ namespace TEngine {
                                 return false;
                             }
                             key.m_keystate = Key::KeyState::Wait;
-                            key.m_repeat_delay.done(key.m_timer.delta_time());
+                            key.m_repeat_delay.done(delta_time);
                             // if delay == 0, just jump to repeat state
                         } else {
                             key.m_keystate = Key::KeyState::Up;
@@ -102,7 +149,7 @@ namespace TEngine {
                     }; break;
                     case Key::KeyState::Wait: {
                         if (is_down(key.scancode)) {
-                            if (!key.m_repeat_delay.done(key.m_timer.delta_time())) {
+                            if (!key.m_repeat_delay.done(delta_time)) {
                                 return false;
                             }
                             key.m_keystate = Key::KeyState::Repeat;
@@ -120,7 +167,7 @@ namespace TEngine {
                             key.m_repeat_delay.reset();
                             key.m_repeat_interval.reset();
                             return false;
-                        } else if (!key.m_repeat_interval.done(key.m_timer.delta_time())) {
+                        } else if (!key.m_repeat_interval.done(delta_time)) {
                             return false;
                         } else {
                             return true;
@@ -134,7 +181,6 @@ namespace TEngine {
         }
 
         namespace Mouse {
-
             static bool init_mouse() {
                 return SDL_WasInit(SDL_INIT_VIDEO);
             }
@@ -202,16 +248,20 @@ namespace TEngine {
             alpha != other.alpha;
     }
 
-    Vec2 Vec2::operator+(const Vec2 other) const {
-        float x1 = this->x + other.x;
-        float y1 = this->y + other.y;
+    Vec2 operator+(const Vec2 lhs, const Vec2 rhs) {
+        float x1 = lhs.x + rhs.x;
+        float y1 = lhs.y + rhs.y;
         return Vec2{x1, y1};
     }
 
-    Vec2 Vec2::operator*(float scalar) const {
-        float x1 = this->x * scalar;
-        float y1 = this->y * scalar;
+    Vec2 operator*(const Vec2 vec, float scalar) {
+        float x1 = vec.x * scalar;
+        float y1 = vec.y * scalar;
         return Vec2{x1, y1};
+    }
+
+    Vec2 operator*(float scalar, const Vec2 vec) {
+        return vec * scalar;
     }
 
     Vec2& Vec2::operator+=(const Vec2 other) {
@@ -220,9 +270,9 @@ namespace TEngine {
         return *this;
     }
 
-    Vec2 Vec2::operator-(const Vec2 other) const {
-        float x1 = this->x - other.x;
-        float y1 = this->y - other.y;
+    Vec2 operator-(const Vec2 lhs, const Vec2 rhs) {
+        float x1 = lhs.x - rhs.x;
+        float y1 = lhs.y - rhs.y;
         return Vec2{x1, y1};
     }
 
@@ -238,28 +288,32 @@ namespace TEngine {
         return *this;
     }
 
-    bool Vec2::operator==(const Vec2 other) const {
-        return this->x == other.x
-            && this->y == other.y;
+    bool operator==(const Vec2 lhs, const Vec2 rhs) {
+        return lhs.x == rhs.x
+            && lhs.y == rhs.y;
     }
 
-    bool Vec2::operator!=(const Vec2 other) const {
-        // return this->x != other.x || this->y != other.y;
-        return !(*this == other);
+    bool operator!=(const Vec2 lhs, const Vec2 rhs) {
+        // return lhs.x != rhs.x || lhs.y != rhs.y;
+        return !(lhs == rhs);
     }
 
-    Vec3 Vec3::operator+(const Vec3 other) const {
-        float x1 = this->x + other.x;
-        float y1 = this->y + other.y;
-        float z1 = this->z + other.z;
+    Vec3 operator+(const Vec3 lhs, const Vec3 rhs) {
+        float x1 = lhs.x + rhs.x;
+        float y1 = lhs.y + rhs.y;
+        float z1 = lhs.z + rhs.z;
         return Vec3{x1, y1, z1};
     }
 
-    Vec3 Vec3::operator*(float scalar) const {
-        float x1 = this->x * scalar;
-        float y1 = this->y * scalar;
-        float z1 = this->z * scalar;
+    Vec3 operator*(const Vec3 vec, float scalar) {
+        float x1 = vec.x * scalar;
+        float y1 = vec.y * scalar;
+        float z1 = vec.z * scalar;
         return Vec3{x1, y1, z1};
+    }
+
+    Vec3 operator*(float scalar, const Vec3 vec) {
+        return vec * scalar;
     }
 
     Vec3& Vec3::operator+=(const Vec3 other) {
@@ -269,10 +323,10 @@ namespace TEngine {
         return *this;
     }
 
-    Vec3 Vec3::operator-(const Vec3 other) const {
-        float x1 = this->x - other.x;
-        float y1 = this->y - other.y;
-        float z1 = this->z - other.z;
+    Vec3 operator-(const Vec3 lhs, const Vec3 rhs) {
+        float x1 = lhs.x - rhs.x;
+        float y1 = lhs.y - rhs.y;
+        float z1 = lhs.z - rhs.z;
         return Vec3{x1, y1, z1};
     }
 
@@ -290,14 +344,14 @@ namespace TEngine {
         return *this;
     }
 
-    bool Vec3::operator==(const Vec3 other) const {
-        return this->x == other.x
-            && this->y == other.y
-            && this->z == other.z;
+    bool operator==(const Vec3 lhs, const Vec3 rhs) {
+        return lhs.x == rhs.x
+            && lhs.y == rhs.y
+            && lhs.z == rhs.z;
     }
 
-    bool Vec3::operator!=(const Vec3 other) const {
-        return !(*this == other) ;
+    bool operator!=(const Vec3 lhs, const Vec3 rhs) {
+        return !(lhs == rhs) ;
     }
 
     std::ostream& operator<<(std::ostream& output, const Color& v) {

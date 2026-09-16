@@ -3,13 +3,12 @@
 #include "tengine.hpp"
 #include <functional>
 #include <typeindex>
-#include <cstdint>
+#include <variant>
 #include <vector>
 #include <utility>
-#include <iostream>
 #include <SDL3/SDL.h>
 
-// event stuff taken from The Cherno's mini-series on application architecture
+// event stuff taken and adapted from The Cherno's mini-series on application architecture
 // https://github.com/TheCherno/Architecture/blob/main/Core/Source/Core/Event.h
 #define EVENT_CLASS_TYPE(type) static EventType get_static_type() { return EventType::type; }\
 								virtual EventType get_event_type() const override { return get_static_type(); }\
@@ -19,11 +18,13 @@ namespace TEngine {
     namespace Events {
         enum class EventType {
             None = 0,
-            KeyPressed, KeyDown, KeyReleased,
-            MousePressed, MouseReleased, MouseMoved, MouseWheel
+            KeyPressed, KeyRepeat, KeyReleased,
+            MousePressed, MouseReleased, MouseMoved, MouseWheel,
+            WindowResized,
         };
 
-        // TODO - maybe reduce the object-orientation of this
+        // All main events have to implement this interface to work
+        // with the main event dispatcher
         class IEvent {
         public:
             bool handled = false;
@@ -36,55 +37,47 @@ namespace TEngine {
 
         class KeyPressedEvent : public IEvent {
         public:
-            KeyPressedEvent(SDL_Scancode scancode) : m_scancode{scancode} {}
-            SDL_Scancode get_scancde() const { return m_scancode; }
-            
+            KeyPressedEvent(SDL_Scancode scancode) : scancode{scancode} {}
+
+            const SDL_Scancode scancode;
             EVENT_CLASS_TYPE(KeyPressed)
-        private:
-            SDL_Scancode m_scancode;
         };
 
         class KeyRepeatEvent : public IEvent {
         public:
-            KeyRepeatEvent(SDL_Scancode scancode) : m_scancode{scancode} {}
-            SDL_Scancode get_scancde() const { return m_scancode; }
-            
-            EVENT_CLASS_TYPE(KeyDown)
-        private:
-            SDL_Scancode m_scancode;
+            KeyRepeatEvent(SDL_Scancode scancode) : scancode{scancode} {}
+
+            const SDL_Scancode scancode;
+            EVENT_CLASS_TYPE(KeyRepeat)
         };
 
         class KeyReleasedEvent : public IEvent {
         public:
-            KeyReleasedEvent(SDL_Scancode scancode) : m_scancode{scancode} {}
-            SDL_Scancode get_scancde() const { return m_scancode; }
+            KeyReleasedEvent(SDL_Scancode scancode) : scancode{scancode} {}
             
+            const SDL_Scancode scancode;
             EVENT_CLASS_TYPE(KeyReleased)
-        private:
-            SDL_Scancode m_scancode;
         };
 
         class MousePressedEvent : public IEvent {
         public:
             MousePressedEvent(int mouse_button, float x, float y, int clicks) :
+                clicks{clicks},
                 m_button{mouse_button},
                 m_x{x},
-                m_y{y},
-                m_clicks{clicks}
+                m_y{y}
             {}
 
             bool right_button_pressed() const { return m_button == SDL_BUTTON_RIGHT; }
             bool left_button_pressed() const { return m_button == SDL_BUTTON_LEFT; }
-            int button_clicks() const { return m_clicks; }
             Vec2 get_position() const { return { m_x, m_y }; }
-
+            
+            const int clicks;
             EVENT_CLASS_TYPE(MousePressed)
         private:
             int m_button;
             float m_x;
             float m_y;
-
-            int m_clicks;
         };
 
         class MouseReleasedEvent : public IEvent {
@@ -129,33 +122,60 @@ namespace TEngine {
         class MouseWheelEvent : public IEvent {
         public:
             MouseWheelEvent(float scroll_dx, float scroll_dy, float pos_x, float pos_y, bool flipped) :
+                flipped{flipped},
                 m_x{pos_x},
                 m_y{pos_y},
                 m_dx{scroll_dx},
-                m_dy{scroll_dy},
-                m_flipped{flipped}
+                m_dy{scroll_dy}
             {}
-
+            
             Vec2 get_position() const { return { m_x, m_y }; }
             Vec2 get_scroll_dir() const { return { m_dx, m_dy}; }
-            bool is_flipped() const { return m_flipped; }
-
+            
+            const bool flipped;
             EVENT_CLASS_TYPE(MouseWheel)
         private:
             float m_x;
             float m_y;
             float m_dx;
             float m_dy;
-            bool m_flipped;
         };
 
-        // handful abstract class for implementing event methods
+        class WindowResizedEvent : public IEvent {
+        public:
+            WindowResizedEvent(int new_width, int new_height) :
+                width{new_width},
+                height{new_height}
+            {}
+
+            Vec2 get_size() const { return {static_cast<float>(width), static_cast<float>(height)}; }
+
+            const int width;
+            const int height;
+            EVENT_CLASS_TYPE(WindowResized)
+        };
+
+        // not really necessary unless polymorphic event listeners are neeed.
+        // as long as you have a function that takes an event, you can use the event dispatcher
         class EventListener {
         public:
             virtual ~EventListener() = default;
-            virtual void event(IEvent&) {};
+            virtual void event(IEvent&) = 0;
         };
 
+        // convenience function. it constructs the Event on the stack
+        // and forwards it to the receiver R.
+        // this function is not mandatory to use in case you want to forward events
+        template<typename Event, typename R, typename ...Args>
+        requires(std::is_base_of_v<IEvent, Event> && requires(R receiver, Event evemt) {
+            { receiver.event(evemt) } -> std::same_as<void>;
+        })
+        void forward_event(R& receiver, Args&& ...args) {
+            auto ev = Event{std::forward<Args>(args)...};
+            receiver.event(ev);
+        }
+        
+        // handful abstract class for implementing event methods
         class EventListenerFunctions {
         public:
             virtual ~EventListenerFunctions() = default;
@@ -169,16 +189,24 @@ namespace TEngine {
             virtual bool OnMouseReleased(MouseReleasedEvent&) { return false; }
             virtual bool OnMouseMoved(MouseMovedEvent&) { return false; }
             virtual bool OnMouseScroll(MouseWheelEvent&) { return false; };
+
+            // window events
+            virtual bool OnWindowResize(WindowResizedEvent&) { return false; };
         };
 
         template<typename FN, typename EventType>
-        concept DispatcherCallback = requires(FN fn, EventType& ev) {
+        concept DispatcherCallback = requires(FN fn, EventType ev) {
             { fn(ev) } -> std::same_as<bool>;
         } && std::is_base_of_v<IEvent, EventType>;
 
+        // This is an alternative to the dispatch_event(IEvent&) function
         class EventDispatcher final {
         public:
             EventDispatcher(IEvent& event) : m_event{event} {}
+            // This function should be called for all events that you may want to respond to.
+            // Example:
+            // dispatch_event<MouseEvent>(event);
+            // dispatch_event<KeyEvent>(event);
             template<typename EventType, DispatcherCallback<EventType> EventCallback> requires(std::is_base_of_v<IEvent, EventType>)
             bool dispatch(EventCallback f) {
                 if (m_event.get_event_type() == EventType::get_static_type() && !m_event.handled) {
@@ -190,6 +218,20 @@ namespace TEngine {
         private:
             IEvent& m_event;
         };
+
+        // This function should be called for all events that you may want to respond to.
+        // This is an alternative to the EventDispatcher class
+        // Example:
+        // dispatch_event<MouseEvent>(event);
+        // dispatch_event<KeyEvent>(event);
+        template<typename EventType, DispatcherCallback<EventType> EventCallback> requires(std::is_base_of_v<IEvent, EventType>)
+        bool dispatch_event(IEvent& event, EventCallback f) {
+            if (event.get_event_type() == EventType::get_static_type() && !event.handled) {
+                event.handled = f(*dynamic_cast<EventType*>(&event));
+                return true;
+            }
+            return false;
+        }
 
         class ICustomEvent {
         public:

@@ -7,17 +7,16 @@
 // TODO - have a working implementation of these that actually makes sense
 namespace Tetris::States {
     void MenuState::enter() {
-        tmp_counter = 10;
+        tmp_counter.time = 10;
         m_read_any = true;
     }
 
     void MenuState::update(double delta_t) {
-        tmp_counter -= delta_t;
         if (!m_menu->update(delta_t)) {
             m_sm_ptr->switch_to(STATE_TETRIS);
         }
-        if (tmp_counter <= 0) {
-            tmp_counter = 0;
+        if (tmp_counter.done(delta_t)) {
+            tmp_counter.time = 0;
         }
     }
 
@@ -36,7 +35,7 @@ namespace Tetris::States {
     }
 
     void MenuState::reset(void) {
-        tmp_counter = 0;
+        tmp_counter.time = 0;
         m_read_any = true;
         m_menu->reset();
     }
@@ -46,9 +45,9 @@ namespace Tetris::States {
     }
 
     bool MenuState::OnKeyPressed(TEngine::Events::KeyPressedEvent& event) {
-        // if (m_tetris_keys->keys.hold_piece.scancode == event.get_scancde()) {
+        // if (m_tetris_keys->keys.hold_piece.scancode == event.scancode) {
         m_menu->event(event);
-        // if ((m_tetris_keys->any_match(event.get_scancde()) && m_read_any) || m_tetris_keys->keys.hold_piece.scancode == event.get_scancde()) {
+        // if ((m_tetris_keys->any_match(event.scancode) && m_read_any) || m_tetris_keys->keys.hold_piece.scancode == event.scancode) {
         //     m_menu->event(event);
         //     // if (m_menu->wants_switch_state()) {
         //     //     m_sm_ptr->switch_to(STATE_TETRIS);
@@ -64,12 +63,7 @@ namespace Tetris::States {
 
 
     void RunGameState::enter() {
-        m_game_ptr->restart();
-        m_begin_countdown.reset();
-        m_pause_countdown.set_countdown_time(0);
-        m_pause = false;
-        m_run_state = State::Begin;
-        go_count = 0;
+        reset();
     }
 
     void RunGameState::update(double delta_t) {
@@ -83,27 +77,26 @@ namespace Tetris::States {
             return;
         }
 
-        go_count += delta_t;
-        go_count = go_count > 1 ? 1 : go_count;
+        m_go_count.done(delta_t);
 
-        const auto read_input = [this]() {
+        const auto read_input = [this, delta_t]() {
             using namespace TEngine;
             using namespace TEngine::Input;
             using Tetrimino::Rotation;
 
             Vec2 dir{};
             Rotation rot{};
-            if (Keyboard::may_press(m_tetris_keys->keys.left)) {
+            if (Keyboard::may_press(m_tetris_keys->keys.left, delta_t)) {
                 dir = Vec2{-1,0};
-            } else if (Keyboard::may_press(m_tetris_keys->keys.right)) {
+            } else if (Keyboard::may_press(m_tetris_keys->keys.right, delta_t)) {
                 dir = Vec2{1,0};
-            } else if (Keyboard::may_press(m_tetris_keys->keys.down)) {
+            } else if (Keyboard::may_press(m_tetris_keys->keys.down, delta_t)) {
                 dir = Vec2{0,-1};
             }
             
-            if (Keyboard::may_press(m_tetris_keys->keys.rotate_clockwise)) {
+            if (Keyboard::may_press(m_tetris_keys->keys.rotate_clockwise, delta_t)) {
                 rot = Rotation::Clockwise;
-            } else if (Keyboard::may_press(m_tetris_keys->keys.rotate_counterclockwise)) {
+            } else if (Keyboard::may_press(m_tetris_keys->keys.rotate_counterclockwise, delta_t)) {
                 rot = Rotation::Counterclockwise;
             }
 
@@ -130,19 +123,18 @@ namespace Tetris::States {
         float scale = 5;
         if (m_begin_countdown.get_time_left() > 0) {
             TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_begin_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale);
-        } else if (go_count < 1) {
+        } else if (!m_go_count.done(0)) {
             const char go[] = "go!";
             size_t twid = sizeof(go) - 1;
             // scale = 5;
-            TEngine::Text::BitmapFontRenderer::draw_string(m_font, go, (960 - twid * m_font->tile_size() * scale) / 2.0f, (720 - m_font->tile_size() * scale) / 2.0f, scale);
+            TEngine::Text::BitmapFontRenderer::draw_string_line(m_font, go, (960 - twid * m_font->tile_size() * scale) / 2.0f, (720 - m_font->tile_size() * scale) / 2.0f, scale);
         }
 
         if (m_pause) {
-            go_count = 1;
             const char pause[] = "pause";
             size_t twid = sizeof(pause) - 1;
             // scale = 5;
-            TEngine::Text::BitmapFontRenderer::draw_string(m_font, pause, (960 - twid * m_font->tile_size() * scale) / 2.0f, (720 - m_font->tile_size() * scale) / 2.0f, scale);
+            TEngine::Text::BitmapFontRenderer::draw_string_line(m_font, pause, (960 - twid * m_font->tile_size() * scale) / 2.0f, (720 - m_font->tile_size() * scale) / 2.0f, scale);
         }
         if (m_pause_countdown.get_time_left() > 0 && !m_pause) {
             TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_pause_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale);
@@ -154,10 +146,12 @@ namespace Tetris::States {
         m_begin_countdown.reset();
         m_pause_countdown.set_countdown_time(0);
         m_pause = false;
+        
+        m_run_state = State::Begin;
+        m_go_count.time = 1;
     }
 
     void RunGameState::exit() {
-        reset();
     }
 
     bool RunGameState::OnKeyPressed(TEngine::Events::KeyPressedEvent& event) {
@@ -165,13 +159,13 @@ namespace Tetris::States {
             return false;
         }
 
-        if (m_tetris_keys->keys.hard_drop.scancode == event.get_scancde() && m_pause_countdown.get_time_left() <= 0) {
+        if (m_tetris_keys->keys.hard_drop.scancode == event.scancode && m_pause_countdown.get_time_left() <= 0) {
             m_game_ptr->do_hard_drop();
             return true;
-        } else if (m_tetris_keys->keys.hold_piece.scancode == event.get_scancde() && m_pause_countdown.get_time_left() <= 0) {
+        } else if (m_tetris_keys->keys.hold_piece.scancode == event.scancode && m_pause_countdown.get_time_left() <= 0) {
             m_game_ptr->do_hold_piece();
             return true;
-        } else if (m_tetris_keys->keys.pause.scancode == event.get_scancde()) {
+        } else if (m_tetris_keys->keys.pause.scancode == event.scancode) {
             // m_game_ptr->do_pause();
             m_pause = !m_pause;
             return true;
@@ -187,26 +181,104 @@ namespace Tetris::States {
 
 
     void GameOverState::enter(void) {
-
+        reset();
+        m_leaderboard.load_scores(m_lb_storage);
+        m_has_highscore = m_leaderboard.is_new_highscore(m_game_ptr->get_score());
     }
     void GameOverState::update(double delta_t) {
-        tmp_counter -= delta_t;
-        if (tmp_counter <= 0) {
-            m_sm_ptr->switch_to(STATE_MAIN_MENU);
+        if (m_gameover_timer.done(delta_t)) {
+            // m_sm_ptr->switch_to(STATE_MAIN_MENU);
+        }
+        if (!m_highscore_delay.done(delta_t)) {
+            return;
+        }
+
+        if (m_has_highscore) {
+            if (!m_leaderboard_transition_delay.done(delta_t)) {
+                return;
+            }
+        } else {
+            m_leaderboard_transition_delay.time = 0;
+        }
+
+        if (m_blocks_framerate.done(delta_t)) {
+            for (auto& p : m_blocks_wireframe) {
+                auto& ins = p.instance;
+                ins.rotate_y(-SDL_PI_F/4.0f * m_blocks_framerate.get_countdown_time());
+            }
+        }
+    
+        if (m_switch_block.done(delta_t)) {
+            ++m_block;
+            if (m_block == m_blocks_wireframe.rend()) {
+                m_block = m_blocks_wireframe.rbegin();
+            }
         }
     }
-    // void GameOverState::handle_input(void) {
-    //     // TODO - noise.... seriously think of better ways to handle inputs (maybe try out implementing Events)
-    //     // m_input_event_handler->reset_events();
-    // }
+    void GameOverState::event(TEngine::Events::IEvent& event) {
+        using namespace TEngine::Events;
+        EventDispatcher ed{event};
+        ed.dispatch<KeyPressedEvent>([this](auto&) -> bool {
+            if (!m_highscore_delay.done(0)) {
+                m_highscore_delay.time = 0;
+            } else if (!m_leaderboard_transition_delay.done(0)) {
+                m_leaderboard_transition_delay.time = 0;
+            } else if (m_gameover_timer.done(0)) {
+                m_sm_ptr->switch_to(STATE_MAIN_MENU);
+            }
+            return true;
+        });
+    }
     void GameOverState::draw(void) {
-        TEngine::Text::BitmapFontRenderer::draw_string_line(m_font, "GAME OVER", 10, 10, 4);
+        using namespace TEngine::Text;
+        if (m_highscore_delay.time > 0 && m_leaderboard_transition_delay.time > 0) {
+            BitmapFontRenderer::draw_string_line(m_font, "GAME OVER", m_gameover_text_pos.x, m_gameover_text_pos.y, 5);
+        }
+
+        if (m_has_highscore && m_highscore_delay.time == 0 && m_leaderboard_transition_delay.time > 0) {
+            BitmapFontRenderer::draw_string_line(m_font, "new highscore", m_newscore_text_pos.x, m_newscore_text_pos.y, 5);
+        }
+
+        if (m_leaderboard_transition_delay.time == 0) {
+            auto part = std::upper_bound(m_leaderboard.begin(), m_leaderboard.end(), m_game_ptr->get_score(),
+                [](const auto lhs, const auto& rhs){
+                    return lhs > std::get<0>(rhs);
+                }
+            );
+            float y_off = 0;
+            const auto draws = [this, &y_off](auto begin, auto end){
+                for (auto it = begin; it != end; ++it) {
+                    const auto& [score, name] = *it;
+                    BitmapFontRenderer::draw_string_line(m_font, name, m_leaderboard_offset.x, m_leaderboard_offset.y + y_off, 4);
+                    BitmapFontRenderer::draw_int64(m_font, score, m_leaderboard_offset.x + 10 * 8* 4, m_leaderboard_offset.y + y_off, 4);
+                
+                    y_off += 4 * 11;
+                }
+            };
+            draws(m_leaderboard.begin(), part);
+            BitmapFontRenderer::draw_int64(m_font, m_game_ptr->get_score(), m_leaderboard_offset.x + 10 * 8* 4, m_leaderboard_offset.y + y_off, 4);
+            y_off += 4 * 11;
+            draws(part, m_leaderboard.end());
+
+            m_block->draw_wireframe();
+        }
     }
+
     void GameOverState::reset(void) {
-        tmp_counter = 5;
+        m_gameover_timer.time = 5;
+        m_highscore_delay.time = 3;
+        m_leaderboard_transition_delay.time = 4;
+        m_gameover_text_pos = { (960 - (5 * m_font->tile_size() * (sizeof("game over") - 1))) / 2.0f, (720 - 5 * m_font->tile_size()) / 2.0f };
+        m_newscore_text_pos = { (960 - (5 * m_font->tile_size() * (sizeof("new highscore") - 1))) / 2.0f, (720 - 5 * m_font->tile_size()) / 2.0f };
+        m_leaderboard_offset = {};
+        m_block = m_blocks_wireframe.rbegin();
+
+        m_blocks_framerate.reset();
+        m_switch_block.reset();
     }
+
     void GameOverState::exit(void) {
-        reset();
+        m_leaderboard.flush_scores(m_lb_storage);
     }
 
 
@@ -222,13 +294,18 @@ namespace Tetris::States {
         Tetris::MainMenu* menu_ptr, 
         SDL_Renderer* renderer,
         Tetris::Keybinds* tetris_keys,
-        TEngine::Text::BitmapFont* font
+        TEngine::Text::BitmapFont* font,
+        Score::Leaderboard& leaderboard,
+        std::span<Tetris::Piece3D> blocks_wireframe,
+        std::span<Tetris::Piece3D> blocks_filled
     ) :
         m_runstate{this, game_ptr, tetris_keys, font, renderer},
-        m_menustate{this, menu_ptr, tetris_keys, renderer, font},
-        m_gameoverstate(this, renderer, font),
+        m_menustate{this, game_ptr, menu_ptr, tetris_keys, renderer, font},
+        m_gameoverstate(this, game_ptr, renderer, font, leaderboard, blocks_wireframe),
         m_states{ &m_menustate, &m_runstate, &m_gameoverstate },
         m_current{m_states.at(STATE_MAIN_MENU)},
+        m_blocks_wireframe(blocks_wireframe),
+        m_blocks_filled(blocks_filled),
         m_switching(false),
         m_next{-1}
     {

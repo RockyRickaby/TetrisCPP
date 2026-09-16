@@ -598,7 +598,7 @@ namespace Tetris {
     void Game::draw_text_elements() {
         Text::BitmapFontRenderer::draw_string_line(
             m_text_font, "HOLD",
-            m_board_offset_x - 4.10f * m_scale,
+            m_board_offset_x - 4.05f * m_scale,
             m_board_offset_y + 2.40f * m_scale,
             m_scale / 11.5f
         );

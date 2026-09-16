@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <charconv>
+#include <format>
 #include <iostream>
 #include <fstream>
 #include <array>
@@ -28,8 +29,8 @@ static inline TEngine::Vec2 project_v(TEngine::Vec3 vec);
 static inline TEngine::Vec2 to_screen_coords(TEngine::Vec2 p, int win_w, int win_h, int rend_w, int rend_h);
 
 static inline TEngine::Vec3 jitter_vec(float min, float max, bool jitter_individually = true);
-static inline SDL_FColor get_flat_color(const std::vector<TEngine::Vec3>& face, TEngine::Vec3 face_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb);
-static inline SDL_FColor get_flat_specular(const std::vector<TEngine::Vec3>& face, TEngine::Vec3 face_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb);
+static inline SDL_FColor get_flat_color(TEngine::Vec3 face, TEngine::Vec3 face_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb);
+static inline SDL_FColor get_flat_specular(TEngine::Vec3 face, TEngine::Vec3 face_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb);
 static inline SDL_FColor get_gouraud_color(TEngine::Vec3 vert, TEngine::Vec3 vert_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb);
 static inline SDL_FColor get_gouraud_specular(TEngine::Vec3 vert, TEngine::Vec3 vert_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb);
 
@@ -40,8 +41,8 @@ namespace TEngine::Silly3D {
     };
 
     // @fn is called whenever a non-culled face is ready to be used, during the generation loop
-    template<WireframeLambda T>
-    static inline void generate_wireframe_with_accept(const SillyModel* model, SillyModel::WireframeFNArgs args, T fn) {
+    template<WireframeLambda F>
+    static inline void generate_wireframe_with_accept(const SillyModel* model, SillyModel::WireframeFNArgs args, F fn) {
         std::vector<Vec3> verts;
         std::vector<Vec2> points;
         verts.resize(model->face_len);
@@ -82,8 +83,8 @@ namespace TEngine::Silly3D {
     };
 
     // @fn is called at the end of the generation, after all faces have been culled and sorted
-    template<GeometryLambda T>
-    static inline void generate_geometry_with_accept(const SillyModel* model, SillyModel::GeometryFNArgs args, T fn) {
+    template<GeometryLambda F>
+    static inline void generate_geometry_with_accept(const SillyModel* model, SillyModel::GeometryFNArgs args, F fn) {
         assert(model->face_len == 3 && "currently, can't fill geometry if the faces aren't made of triangles");
         
         struct __convenience {
@@ -119,7 +120,9 @@ namespace TEngine::Silly3D {
             // back-face culling
             if (align < 0) {
                 SDL_FColor new_color = { args.color.r / 255.0f, args.color.g / 255.0f, args.color.b / 255.0f, args.color.a / 255.0f };
-                new_color = get_flat_color(verts, normal, new_color, args.light_pos, args.light_ambient);
+                if (args.shade) {
+                    new_color = get_flat_color(verts[0], normal, new_color, args.light_pos, args.light_ambient);
+                }
                 __convenience ind_struct;
                 for (int i = 0; i < model->face_len; ++i) {
                     points[i] = to_screen_coords(project_v(verts[i]), args.window_w, args.window_h, args.render_w, args.render_h);
@@ -168,7 +171,6 @@ namespace TEngine::Silly3D {
         vertices{verts},
         text_uv{},
         indices{},
-        material{nullptr},
         face_len{faces_len}
     {
         assert(face_len >= 3 && "length of faces should be greater than 2 (otherwise it's just a line)");
@@ -184,7 +186,6 @@ namespace TEngine::Silly3D {
         std::vector<Vec3>&& normals,
         std::vector<Vec2>&& texture_uv,
         std::vector<std::tuple<int, int, int>>&& indices,
-        SillyMaterial* material,
         int faces_len
     ) :
         name{name},
@@ -192,7 +193,6 @@ namespace TEngine::Silly3D {
         vert_normals{std::move(normals)},
         text_uv{std::move(texture_uv)},
         indices{std::move(indices)},
-        material{material},
         face_len{faces_len}
     {}
 
@@ -223,7 +223,7 @@ namespace TEngine::Silly3D {
         SDL_BlendMode b;
         SDL_GetRenderDrawBlendMode(renderer, &b);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_Texture* txt = material->texture.get();
+        SDL_Texture* txt = args.material.texture.get();
         generate_geometry_with_accept(this, args,
             [renderer, txt](auto& v, auto& i){
                 SDL_RenderGeometry(
@@ -286,7 +286,6 @@ namespace TEngine::Silly3D {
     void SillyInstance3DCached::draw_wireframe() {
         if (m_needs_update) {
             m_wireframe.clear();
-            auto& ps = m_wireframe;
             generate_wireframe_with_accept(model,{
                 .position_v = position,
                 .rotation_v = rotation,
@@ -297,9 +296,9 @@ namespace TEngine::Silly3D {
                 .render_h = m_render_h,
                 .jitter = jitter,
                 .backface_cull = cull_wireframe
-            }, [&ps](auto& points, int){
+            }, [this](auto& points, int){
                 for (auto& v : points) {
-                    ps.emplace_back(v.x, v.y);
+                    m_wireframe.emplace_back(v.x, v.y);
                 }
             });
             m_needs_update = false;
@@ -328,21 +327,21 @@ namespace TEngine::Silly3D {
 
     void SillyInstance3DCached::draw_geometry(const Vec3& light_pos, float light_ambient) {
         if (m_needs_update) {
-            auto& ver = m_geometry;
-            auto& ind = m_geo_indices;
             generate_geometry_with_accept(model,{
                 .position_v = position,
                 .rotation_v = rotation,
+                .material = *material,
                 .light_pos = light_pos,
                 .light_ambient = light_ambient,
                 .color = color,
                 .window_w = m_window_w,
                 .window_h = m_window_h,
                 .render_w = m_render_w,
-                .render_h = m_render_h
-            }, [&ver, &ind](auto& v, auto& i){
-                ver = std::move(v);
-                ind = std::move(i);
+                .render_h = m_render_h,
+                .shade = shading
+            }, [this](auto& v, auto& i){
+                m_geometry = std::move(v);
+                m_geo_indices = std::move(i);
             });
             m_needs_update = false;
         }
@@ -351,7 +350,7 @@ namespace TEngine::Silly3D {
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_RenderGeometry(
             renderer,
-            model->get_material()->texture.get(),
+            material->texture.get(),
             m_geometry.data(),
             static_cast<int>(m_geometry.size()),
             m_geo_indices.data(),
@@ -393,10 +392,9 @@ namespace TEngine::Silly3D {
 
     void SillyInstance3D::draw_wireframe() const {
         SDL_BlendMode b;
-        SDL_Renderer* r = renderer;
-        SDL_GetRenderDrawBlendMode(r, &b);
-        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(r, color.r, color.g, color.b, SDL_ALPHA_OPAQUE);
+        SDL_GetRenderDrawBlendMode(renderer, &b);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, SDL_ALPHA_OPAQUE);
         generate_wireframe_with_accept(model, {
             .position_v = position,
             .rotation_v = rotation,
@@ -407,10 +405,10 @@ namespace TEngine::Silly3D {
             .render_h = m_render_h,
             .jitter = jitter,
             .backface_cull = cull_wireframe
-        }, [r](const auto& points, int face_len) -> void {
+        }, [this](const auto& points, int face_len) -> void {
             for (int k = 0; k < face_len; k++) {
                 SDL_RenderLine(
-                    r,
+                    renderer,
                     points[k].x,
                     points[k].y,
                     points[(k + 1) % face_len].x,
@@ -418,37 +416,37 @@ namespace TEngine::Silly3D {
                 );
             }
         });
-        SDL_SetRenderDrawBlendMode(r, b);
+        SDL_SetRenderDrawBlendMode(renderer, b);
         // SDL_RenderLines(r, m_wireframe.data(), m_wireframe.size());
     }
 
     void SillyInstance3D::draw_geometry(const Vec3& light_pos, float light_ambient) const {
         SDL_BlendMode b;
-        SDL_Renderer* r = renderer;
-        SDL_GetRenderDrawBlendMode(r, &b);
-        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-        SDL_Texture* texture = model->get_material()->texture.get();
+        SDL_GetRenderDrawBlendMode(renderer, &b);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         generate_geometry_with_accept(model, {
             .position_v = position,
             .rotation_v = rotation,
+            .material = *material,
             .light_pos = light_pos,
             .light_ambient = light_ambient,
             .color = color,
             .window_w = m_window_w,
             .window_h = m_window_h,
             .render_w = m_render_w,
-            .render_h = m_render_h
-        }, [r, texture](const auto& g, const auto& v){
+            .render_h = m_render_h,
+            .shade = shading
+        }, [this](const auto& g, const auto& v){
             SDL_RenderGeometry(
-                r,
-                texture,
+                renderer,
+                material->texture.get(),
                 g.data(),
                 static_cast<int>(g.size()),
                 v.data(),
                 static_cast<int>(v.size())
             );
         });
-        SDL_SetRenderDrawBlendMode(r, b);
+        SDL_SetRenderDrawBlendMode(renderer, b);
     }
 
     SillyModel& SillyAssetManager::load_model(const std::filesystem::path& model_path) {
@@ -458,7 +456,7 @@ namespace TEngine::Silly3D {
         std::ifstream fs;
         fs.open(model_path);
         if (!fs.is_open()) {
-            throw std::runtime_error(std::string{"could not find path: "} + model_path.string());
+            throw std::runtime_error(std::format("could not find path: {}", model_path.string()));
         }
 
         std::string line;
@@ -486,6 +484,9 @@ namespace TEngine::Silly3D {
                 mat = &get_material(data);
             } else if (data == "o") {
                 iss >> name;
+                if (m_models.contains(name)) {
+                    return m_models.at(name);
+                }
             } else if (data == "v") {
                 float x, y, z;
                 iss >> x;
@@ -529,20 +530,19 @@ namespace TEngine::Silly3D {
                     faces++;
                 }
                 face_len = faces;
-            } else {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "ignoring line %s.", line.c_str());
             }
         }
-        m_models.emplace(std::make_pair(name, SillyModel{
+        m_models.emplace(name, SillyModel{
             name,
             std::move(vertices),
             std::move(vert_normals),
             std::move(text_uv),
             std::move(indices),
-            mat,
             face_len
-        }));
-
+        });
+        if (mat) {
+            m_model_to_material.emplace(name, mat->name);
+        }
         return m_models.at(name);
     }
 
@@ -551,7 +551,7 @@ namespace TEngine::Silly3D {
         std::ifstream fs;
         fs.open(material_path);
         if (!fs.is_open()) {
-            throw std::runtime_error(std::string{"could not find path: "} + material_path.string());
+            throw std::runtime_error(std::format("could not find path: {}", material_path.string()));
         }
         std::string line;
         std::string mat_name;
@@ -564,18 +564,16 @@ namespace TEngine::Silly3D {
             if (data == "newmtl") {
                 iss >> mat_name;
                 if (m_materials.contains(mat_name)) {
-                    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Material already loaded: %s.", material_path.string().c_str());
-                    return m_materials[mat_name];
+                    // SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Material already loaded: %s.", material_path.string().c_str());
+                    return m_materials.at(mat_name);
                 }
             } else if (data == "map_Kd") {
                 iss >> data;
                 txt = load_texture(material_path.parent_path() / data, SDL_SCALEMODE_LINEAR, m_renderer);
-            } else {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "ignoring line %s.", line.c_str());
             }
         }
 
-        m_materials.emplace(std::make_pair(mat_name, SillyMaterial{std::move(txt)}));
+        m_materials.emplace(std::make_pair(mat_name, SillyMaterial{mat_name, std::move(txt)}));
         return m_materials.at(mat_name);
     }
     
@@ -589,9 +587,13 @@ namespace TEngine::Silly3D {
 
     SillyInstance3D SillyAssetManager::instance_from(const std::string& model, int win_w, int win_h) {
         auto& mod = m_models.at(model);
+        SillyMaterial* mat = nullptr;
+        if (m_model_to_material.contains(model)) {
+            mat = &m_materials.at(m_model_to_material.at(model));
+        }
         SillyInstance3D ret = {
             .model = &mod,
-            .material = mod.material,
+            .material = mat,
             .color = {255,255,255,255},
             .renderer = m_renderer
         };
@@ -601,8 +603,13 @@ namespace TEngine::Silly3D {
 
     SillyInstance3DCached SillyAssetManager::cached_instance_from(const std::string& model, int win_w, int win_h) {
         auto& mod = m_models.at(model);
+        SillyMaterial* mat = nullptr;
+        if (m_model_to_material.contains(model)) {
+            mat = &m_materials.at(m_model_to_material.at(model));
+        }
         return {
             &mod,
+            mat,
             {}, {}, {255,255,255,255},
             m_renderer, win_w, win_h
         };
@@ -695,13 +702,13 @@ static inline TEngine::Vec3 jitter_vec(float min, float max, bool jitter_individ
     };
 }
 
-static inline SDL_FColor get_flat_color(const std::vector<TEngine::Vec3>& face, TEngine::Vec3 face_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb) {
+static inline SDL_FColor get_flat_color(TEngine::Vec3 face, TEngine::Vec3 face_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb) {
     // TEngine::Vec3 center = {
     //     (face[0].x + face[1].x + face[2].x) / 3,
     //     (face[0].y + face[1].y + face[2].y) / 3,
     //     (face[0].z + face[1].z + face[2].z) / 3,
     // };
-    auto L = (light - face[0]).normalize();
+    auto L = (light - face).normalize();
     float dotNL = face_normal.dot(L); // angle between vecs
     // float factor = std::fmax(0, dotNL) + amb;
     float factor = dotNL + amb;
@@ -714,13 +721,13 @@ static inline SDL_FColor get_flat_color(const std::vector<TEngine::Vec3>& face, 
     };
 }
 
-static inline SDL_FColor get_flat_specular(const std::vector<TEngine::Vec3>& face, TEngine::Vec3 face_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb) {
+static inline SDL_FColor get_flat_specular(TEngine::Vec3 face, TEngine::Vec3 face_normal, const SDL_FColor& t_color, TEngine::Vec3 light, float amb) {
     auto& N = face_normal;
     // light = light.normalize();
 
-    // auto L = (light - face[0]).normalize();
-    auto L = (light - face[0]).normalize();
-    auto V = (TEngine::Vec3{} - face[0]).normalize();
+    // auto L = (light - face).normalize();
+    auto L = (light - face).normalize();
+    auto V = (TEngine::Vec3{} - face).normalize();
 
     float dotNL = N.dot(L);
     // float dotNV = N.dot(V);

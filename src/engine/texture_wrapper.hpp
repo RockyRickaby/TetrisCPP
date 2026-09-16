@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include <iostream>
+// #include <iostream>
 #include <SDL3/SDL.h>
 
 namespace TEngine {
@@ -13,7 +13,7 @@ namespace TEngine {
         // custom deleter so we can just use a flipping std::unique_ptr (no shared pointers!!!)
         struct TextureDeleter {
             void operator()(SDL_Texture* texture) {
-                std::cerr << "calling delete on TextureWrapper\n";
+                // std::cerr << "calling delete on TextureWrapper\n";
                 SDL_DestroyTexture(texture);
             }
         };
@@ -21,12 +21,23 @@ namespace TEngine {
         TextureWrapper() : m_texture{nullptr} {}
         TextureWrapper(SDL_Texture* texture) : m_texture{texture} {}
 
-        SDL_Texture* get() const { return m_texture.get(); }
-        SDL_Texture* operator->() const { return m_texture.get(); }
+        SDL_Texture* get() const noexcept { return m_texture.get(); }
+        SDL_Texture* operator->() const noexcept { return m_texture.get(); }
         // not sure if this one makes sense.
         // written for consistency with the -> operator.
         // avoid copying the structure, as it may (or may not) slice the actual texture data.
-        SDL_Texture& operator*() const { return *m_texture; }
+        SDL_Texture& operator*() const noexcept { return *m_texture; }
+
+        // returns the dimenions (width and height) of the texture in pixels
+        std::pair<int, int> dimensions() const noexcept {
+            float w, h;
+            if (!SDL_GetTextureSize(m_texture.get(), &w, &h)) {
+                return { -1, -1 };
+            }
+            int iw = static_cast<int>(w);
+            int ih = static_cast<int>(h);
+            return { iw, ih };
+        }
     private:
         std::unique_ptr<SDL_Texture, TextureDeleter> m_texture;
     };
@@ -48,12 +59,23 @@ namespace TEngine {
         SharedTextureWrapper() : m_texture{nullptr} {}
         SharedTextureWrapper(SDL_Texture* texture) : m_texture{texture, TextureDeleter{}} {}
         
-        SDL_Texture* get() const { return m_texture.get(); }
-        SDL_Texture* operator->() const { return m_texture.get(); }
+        SDL_Texture* get() const noexcept { return m_texture.get(); }
+        SDL_Texture* operator->() const noexcept { return m_texture.get(); }
         // not sure if this one makes sense.
         // written for consistency with the -> operator.
         // avoid copying the structure, as it may (or may not) slice the actual texture data.
-        SDL_Texture& operator*() const { return *m_texture; }
+        SDL_Texture& operator*() const noexcept { return *m_texture; }
+        
+        // returns the dimenions (width and height) of the texture in pixels
+        std::pair<int, int> dimensions() const noexcept {
+            float w, h;
+            if (!SDL_GetTextureSize(m_texture.get(), &w, &h)) {
+                return { -1, -1 };
+            }
+            int iw = static_cast<int>(w);
+            int ih = static_cast<int>(h);
+            return { iw, ih };
+        }
     private:
         std::shared_ptr<SDL_Texture> m_texture;
     };

@@ -10,18 +10,24 @@
 #include "../texture_wrapper.hpp"
 
 // NOTE: WARNING: NOT TO BE USED FOR ANY SERIOUS 3D IN ANY CIRCUMSTANCE
+// transformation functios that convert 3d coords to screen coords taken from here: https://github.com/tsoding/formula
 namespace TEngine::Silly3D {
     struct SillyMaterial {
+        std::string name;
         TextureWrapper texture;
     };
     // file format: basically a .obj.
     // only the following lines are read by this class: usemtl, v, vn, vt and f. Other lines are ignored.
     // Note: usemtl should point to a PNG texture, not a material name.
     // rendering code taken mostly from here https://github.com/tsoding/formula
+    //
+    // NOTE: WARNING: NOT TO BE USED FOR ANY SERIOUS 3D IN ANY CIRCUMSTANCE
+    // TODO - consider adding SDL_Renderer* member to SillyModel (since the material will be directly tied to it)
     struct SillyModel {
         struct GeometryFNArgs {
             const Vec3& position_v;
             const Vec3& rotation_v;
+            const SillyMaterial& material;
             Vec3 light_pos = {0, 4, 1};
             float light_ambient = 0.55f;
             Color color = {255, 255, 255, 255};
@@ -29,6 +35,7 @@ namespace TEngine::Silly3D {
             int window_h = 0;
             int render_w = 0;
             int render_h = 0;
+            bool shade = true;
         };
         struct WireframeFNArgs {
             const Vec3& position_v;
@@ -47,8 +54,6 @@ namespace TEngine::Silly3D {
         std::vector<Vec3> vert_normals;
         std::vector<Vec2> text_uv;
         std::vector<std::tuple<int,int,int>> indices;
-        // TextureWrapper texture;
-        SillyMaterial* material;
         int face_len;
         
         // renderer argument is only used if needed to load a texture
@@ -60,11 +65,9 @@ namespace TEngine::Silly3D {
             std::vector<Vec2>&& texture_uv,
             std::vector<std::tuple<int, int, int>>&& indices,
             // TextureWrapper&& texture,
-            SillyMaterial* material,
             int faces_len
         );
 
-        SillyMaterial* get_material() const { return material; }
         int get_face_length() const { return face_len; }
 
         void draw(WireframeFNArgs args, SDL_Renderer* renderer) const;
@@ -76,11 +79,13 @@ namespace TEngine::Silly3D {
     public:
         SillyInstance3DCached() : 
             model{},
+            material{},
             renderer{},
             position{},
             rotation{},
             color{},
             cull_wireframe(),
+            shading{},
             jitter{},
             fill{},
             m_window_w{},
@@ -88,13 +93,15 @@ namespace TEngine::Silly3D {
             m_needs_update{}
         {}
 
-        SillyInstance3DCached(SillyModel* model, Vec3 pos, Vec3 rot, Color c, SDL_Renderer* renderer, int win_w, int win_h) :
+        SillyInstance3DCached(SillyModel* model, SillyMaterial* material, Vec3 pos, Vec3 rot, Color c, SDL_Renderer* renderer, int win_w, int win_h) :
             model{model},
+            material{material},         
             renderer{renderer},
             position{pos},
             rotation{rot},
             color{c},
             cull_wireframe(false),
+            shading{true},
             jitter{false},
             fill{false},
             m_window_w{win_w},
@@ -105,12 +112,14 @@ namespace TEngine::Silly3D {
         {}
 
         SillyModel* model;
+        SillyMaterial* material;
         SDL_Renderer* renderer;
         Vec3 position;
         Vec3 rotation;
         Color color;
         
         bool cull_wireframe;
+        bool shading;
         bool jitter;
         bool fill;
 
@@ -163,6 +172,7 @@ namespace TEngine::Silly3D {
         int m_render_h = 0;
         
         bool cull_wireframe = false;
+        bool shading = true;
         bool jitter = false;
         bool fill = false;
 
@@ -188,6 +198,7 @@ namespace TEngine::Silly3D {
 
     class SillyAssetManager {
     public:
+        SillyAssetManager() : m_renderer{nullptr} {}
         SillyAssetManager(SDL_Renderer* r) : m_renderer{r} {}
 
         SillyModel& load_model(const std::filesystem::path& model_path);
@@ -198,9 +209,19 @@ namespace TEngine::Silly3D {
         
         SillyInstance3D instance_from(const std::string& model, int win_w, int win_h);
         SillyInstance3DCached cached_instance_from(const std::string& model, int win_w, int win_h);
+
+        bool set_renderer(SDL_Renderer* renderer) {
+            bool was_null = false;
+            if (m_renderer == nullptr) {
+                m_renderer = renderer;
+                was_null = true;
+            }
+            return was_null;
+        }
     private:
         std::unordered_map<std::string, SillyModel> m_models;
         std::unordered_map<std::string, SillyMaterial> m_materials;
+        std::unordered_map<std::string, std::string> m_model_to_material;
         SDL_Renderer* m_renderer;
     };
 
