@@ -51,6 +51,7 @@ namespace TEngine::Sprites {
         int atlas_width() const { return m_atlas_w; }
         int atlas_height() const { return m_atlas_h; }
         SDL_Renderer* get_renderer(void) const { return m_renderer; }
+        SDL_Texture* get_texture(void) const { return m_texture.get(); }
 
         // stores an offset pair associated with a sprite_id.
         // overwrites previously defined offsets if any are present.

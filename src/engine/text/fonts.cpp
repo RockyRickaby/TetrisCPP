@@ -13,8 +13,8 @@ namespace TEngine::Text {
     }
 
     BitmapFont::BitmapFont(BitmapFont&& other) noexcept :
-        m_atlas(std::move(other.m_atlas)),
-        m_tile_size(other.m_tile_size)
+        m_atlas(std::move(other.m_atlas))
+        // m_tile_size(other.m_tile_size)
     {}
 
     BitmapFont BitmapFont::load_font(const std::filesystem::path& filepath, int tile_size, SDL_Renderer* renderer, SDL_ScaleMode scale_mode, Color key) {
@@ -27,7 +27,7 @@ namespace TEngine::Text {
 
         std::string line;
         BitmapFont fnt;
-        fnt.m_tile_size = tile_size;
+        // fnt.m_tile_size = tile_size;
         while (std::getline(fs, line)) {
             std::istringstream iss{line};
             std::string data;

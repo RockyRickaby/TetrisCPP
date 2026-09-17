@@ -10,7 +10,7 @@
 #include "text_renderer.hpp"
 #include "fonts.hpp"
 
-static inline std::tuple<TEngine::Vec2, TEngine::Vec2> gen_points_for_line(int line_len, float x, float y, float scale, float angle) {
+static inline std::tuple<TEngine::Vec2, TEngine::Vec2> __gen_points_for_line(int line_len, float x, float y, float scale, float angle) {
     float rw = line_len * scale;
     float rh = scale;
     TEngine::Vec2 point1 = TEngine::Vec2{
@@ -36,22 +36,33 @@ static inline std::tuple<TEngine::Vec2, TEngine::Vec2> gen_points_for_line(int l
     return std::make_tuple(point1, point2);
 };
 
+template<typename FN, typename ...Args>
+static inline void __draw_text_colored(TEngine::Text::BitmapFont* f, TEngine::Color color, FN function, Args&& ...args) {
+    auto* texture = f->get_texture_atlas().get_texture();
+    TEngine::Color mod;
+    SDL_GetTextureColorMod(texture, &mod.r, &mod.g, &mod.b);
+    SDL_SetTextureColorMod(texture, color.r, color.g, color.b);
+    function(f, std::forward<Args>(args)...);
+    SDL_SetTextureColorMod(texture, mod.r, mod.g, mod.b);
+}
+
 template<typename Number, typename... Args> requires(std::is_arithmetic_v<Number>)
-static inline void draw_number(TEngine::Text::BitmapFont* f, Number num, float x, float y, float scale, float angle = 0, Args&&... args) {
+static inline void __draw_number(TEngine::Text::BitmapFont* f, Number num, float x, float y, float scale, float angle = 0, Args&&... args) {
     std::array<char, 64> num_buf{};
     std::fill(std::begin(num_buf), std::end(num_buf), 0);
     std::to_chars_result res = std::to_chars(num_buf.data(), num_buf.data() + num_buf.size(), num, std::forward<Args>(args)...);
-
     if (res.ec == std::errc::value_too_large) {
         std::fill(std::begin(num_buf), std::end(num_buf), 0);
     }
+
     // res.ptr points to the end of the converted string
     std::size_t len = static_cast<std::size_t>(res.ptr - num_buf.data());
     const int actual_size = f->tile_size() * scale;
-    auto [start_pos, end_pos] = gen_points_for_line(len, x, y, actual_size, angle);
+    auto [start_pos, end_pos] = __gen_points_for_line(len, x, y, actual_size, angle);
     // for (std::size_t i = 0; i < len; i++) {
     //     f->draw_char(num_buf[i], x + static_cast<float>(i) * scale * f->tile_size(), y, scale);
     // }
+    
     TEngine::Vec2 mov = TEngine::Vec2{actual_size / 2.0f, actual_size / 2.0f};
     for (std::size_t i = 0; i < len; ++i) {
         // lerp!!
@@ -182,7 +193,7 @@ namespace TEngine::Text {
                 total_lines += 1;
             }
             const int actual_size = f->tile_size() * scale;
-            auto [start_pos, end_pos] = gen_points_for_line(longest_line, x, y + ((total_lines - 1)/2.0f) * actual_size, actual_size, angle);
+            auto [start_pos, end_pos] = __gen_points_for_line(longest_line, x, y + ((total_lines - 1)/2.0f) * actual_size, actual_size, angle);
 
             // float line_off = -(static_cast<float>(total_lines) / 2.0f - 0.5f);
             const auto draw_full = [=](float line_offset, float line_inc){
@@ -266,7 +277,7 @@ namespace TEngine::Text {
             //     );
             // }
             int len = static_cast<int>(line.length());
-            auto [start_pos, end_pos] = gen_points_for_line(len, x, y, actual_size, angle);
+            auto [start_pos, end_pos] = __gen_points_for_line(len, x, y, actual_size, angle);
             
             Vec2 mov = Vec2{actual_size / 2.0f, actual_size / 2.0f};
             // for (int i = 0; i < len; ++i) {
@@ -310,16 +321,42 @@ namespace TEngine::Text {
             }
         }
 
+        // m e s s y y y y y y y !!!!!
         void draw_int64(BitmapFont* f, std::int64_t num, float x, float y, float scale, float angle) {
-            draw_number(f, num, x, y, scale, angle);
+            __draw_number(f, num, x, y, scale, angle);
         }
 
         void draw_float(BitmapFont* f, float num, float x, float y, float scale, float angle) {
-            draw_number(f, num, x, y, scale, angle, std::chars_format::fixed);
+            __draw_number(f, num, x, y, scale, angle, std::chars_format::fixed);
         }
 
         void draw_double(BitmapFont* f, double num, float x, float y, float scale, float angle) {
-            draw_number(f, num, x, y, scale, angle, std::chars_format::fixed);
+            __draw_number(f, num, x, y, scale, angle, std::chars_format::fixed);
+        }
+
+
+        void draw_char_color(BitmapFont* f, char ch, float x, float y, float scale, Color color, float angle, TextFlipMode flipmode) {
+            __draw_text_colored(f, color, draw_char, ch, x, y, scale, angle, flipmode);
+        }
+    
+        void draw_string_color(BitmapFont* f, std::string_view str, float x, float y, float scale, Color color, float angle, TextFlipMode flipmode) {
+            __draw_text_colored(f, color, draw_string, str, x, y, scale, angle, flipmode);
+        }
+
+        void draw_string_line_color(BitmapFont* f, std::string_view str, float x, float y, float scale, Color color, float angle, TextFlipMode flipmode) {
+            __draw_text_colored(f, color, draw_string_line, str, x, y, scale, angle, flipmode);
+        }
+
+        void draw_int64_color(BitmapFont* f, std::int64_t num, float x, float y, float scale, Color color, float angle) {
+            __draw_text_colored(f, color, __draw_number<int>, num, x, y, scale, angle);
+        }
+        
+        void draw_float_color(BitmapFont* f, float num, float x, float y, float scale, Color color, float angle) {
+            __draw_text_colored(f, color, __draw_number<float, std::chars_format>, num, x, y, scale, angle, std::chars_format::fixed);
+        }
+
+        void draw_double_color(BitmapFont* f, double num, float x, float y, float scale, Color color, float angle) {
+            __draw_text_colored(f, color, __draw_number<double, std::chars_format>, num, x, y, scale, angle, std::chars_format::fixed);
         }
     }
 }

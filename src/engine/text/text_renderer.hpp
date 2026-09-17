@@ -45,6 +45,14 @@ namespace TEngine::Text {
         void draw_int64(BitmapFont* f, std::int64_t num, float x, float y, float scale, float angle = 0);
         void draw_float(BitmapFont* f, float num, float x, float y, float scale, float angle = 0);
         void draw_double(BitmapFont* f, double num, float x, float y, float scale, float angle = 0);
+        
+        void draw_char_color(BitmapFont* f, char ch, float x, float y, float scale, Color color, float angle = 0, TextFlipMode flipmode = {});
+        void draw_string_color(BitmapFont* f, std::string_view str, float x, float y, float scale, Color color, float angle = 0, TextFlipMode flipmode = {});
+        void draw_string_line_color(BitmapFont* f, std::string_view str, float x, float y, float scale, Color color, float angle = 0, TextFlipMode flipmode = {});
+        
+        void draw_int64_color(BitmapFont* f, std::int64_t num, float x, float y, float scale, Color color, float angle = 0);
+        void draw_float_color(BitmapFont* f, float num, float x, float y, float scale, Color color, float angle = 0);
+        void draw_double_color(BitmapFont* f, double num, float x, float y, float scale, Color color, float angle = 0);
     }
     
     inline void draw_bitmap_text(const BitmapText& text, const SDL_FRect& target_rect) {
