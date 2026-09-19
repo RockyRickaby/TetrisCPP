@@ -232,7 +232,7 @@ namespace TEngine::Silly3D {
                     v.data(),
                     static_cast<int>(v.size()),
                     i.data(),// vert_group.data(),
-                    i.size() // vert_group.size()
+                    static_cast<int>(i.size()) // vert_group.size()
                 );
             }
         );
@@ -736,8 +736,8 @@ static inline SDL_FColor get_flat_specular(TEngine::Vec3 face, TEngine::Vec3 fac
     auto K = (N * -2 * dotNL + L).normalize();
     // float res = std::pow(2 * dotNL * dotNV - dotVL, 100);
     // 1 = Ks, 10 = Ns
-    float res = 1 * std::pow(K.dot(V), 10);
-    float factor = std::fmax(0, res);
+    float res = 1 * std::pow(K.dot(V), 10.0f);
+    float factor = std::fmax(0.0f, res);
 
     return {
         t_color.r * (dotNL + factor + amb),
@@ -754,7 +754,7 @@ static inline SDL_FColor get_gouraud_color(TEngine::Vec3 vert, TEngine::Vec3 ver
     auto L = (light - vert).normalize();
 
     float dotNL = vert_normal.dot(L);
-    float factor = std::fmax(0, dotNL) + amb;
+    float factor = std::fmax(0.0f, dotNL) + amb;
 
     return {
         t_color.r * factor,
@@ -775,8 +775,8 @@ static inline SDL_FColor get_gouraud_specular(TEngine::Vec3 vert, TEngine::Vec3 
     float dotNV = N.dot(V);
     float dotVL = V.dot(L);
 
-    float res = std::pow(2 * dotNL * dotNV - dotVL, 10);
-    float factor = std::fmax(0, res);
+    float res = std::pow(2 * dotNL * dotNV - dotVL, 10.0f);
+    float factor = std::fmax(0.0f, res);
 
     return {
         t_color.r * (dotNL + amb) + factor,

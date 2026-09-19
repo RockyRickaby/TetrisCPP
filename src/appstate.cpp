@@ -41,7 +41,7 @@ SDL_AppResult AppState::setup_app() {
         .logical_height = 720,
         .logical_window_mode = SDL_LOGICAL_PRESENTATION_LETTERBOX,
         .use_logical_window_size = true,
-        .vsync = false
+        .vsync = true
     };
     if (!(TEngine::init(metadata) && TEngine::init_window(window))) {
         return SDL_APP_FAILURE;

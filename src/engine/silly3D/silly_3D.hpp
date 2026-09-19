@@ -90,6 +90,8 @@ namespace TEngine::Silly3D {
             fill{},
             m_window_w{},
             m_window_h{},
+            m_render_w{},
+            m_render_h{},
             m_needs_update{}
         {}
 

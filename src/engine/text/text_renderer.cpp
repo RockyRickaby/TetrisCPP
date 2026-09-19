@@ -47,8 +47,8 @@ static inline void __draw_number(TEngine::Text::BitmapFont* f, Number num, float
 
     // res.ptr points to the end of the converted string
     std::size_t len = static_cast<std::size_t>(res.ptr - num_buf.data());
-    const int actual_size = f->tile_size() * scale;
-    auto [start_pos, end_pos] = __gen_points_for_line(len, x, y, actual_size, angle);
+    const auto actual_size = f->tile_size() * scale;
+    auto [start_pos, end_pos] = __gen_points_for_line(static_cast<int>(len), x, y, actual_size, angle);
     // for (std::size_t i = 0; i < len; i++) {
     //     f->draw_char(num_buf[i], x + static_cast<float>(i) * scale * f->tile_size(), y, scale);
     // }
@@ -110,13 +110,13 @@ namespace TEngine::Text {
             SDL_SetRenderTarget(f->get_renderer(), string_texture);
             SDL_SetRenderDrawColor(f->get_renderer(), 0, 0, 0, SDL_ALPHA_TRANSPARENT);
             SDL_RenderClear(f->get_renderer());
-            const auto render_aux = [f, str](int start, int end, int y_off){
+            const auto render_aux = [f, str](int start, int end, float y_off){
                 for (int i = start; i < end; ++i) {
-                    f->draw_char(str[i], static_cast<float>(i - start) * f->tile_size(), y_off * f->tile_size(), 1);
+                    f->draw_char(str[i], static_cast<float>(i - start) * f->tile_size(), y_off * f->tile_size(), 1.0f);
                 }
             };
             float y_off = 0;
-            int prev_i = 0;
+            std::size_t prev_i = 0;
             for (size_t i = 0; i < str.length(); ++i) {
                 if (str[i] != '\n') {
                     continue;
@@ -137,7 +137,7 @@ namespace TEngine::Text {
             // res.ptr points to the end of the converted string
             std::size_t len = static_cast<std::size_t>(res.ptr - num_buf);
 
-            SDL_Texture* num_texture = SDL_CreateTexture(f->get_renderer(), SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, len * f->tile_size(), f->tile_size());
+            SDL_Texture* num_texture = SDL_CreateTexture(f->get_renderer(), SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, static_cast<int>(len) * f->tile_size(), f->tile_size());
             SDL_SetTextureScaleMode(num_texture, SDL_SCALEMODE_NEAREST);
             SDL_SetRenderTarget(f->get_renderer(), num_texture);
             SDL_SetRenderDrawColor(f->get_renderer(), 0, 0, 0, SDL_ALPHA_TRANSPARENT);
@@ -190,7 +190,7 @@ namespace TEngine::Text {
                 longest_line = std::max(longest_line, static_cast<int>(line.size()));
                 total_lines += 1;
             }
-            const int actual_size = f->tile_size() * scale;
+            const auto actual_size = f->tile_size() * scale;
             auto [start_pos, end_pos] = __gen_points_for_line(longest_line, x, y + ((total_lines - 1)/2.0f) * actual_size, actual_size, angle);
 
             // float line_off = -(static_cast<float>(total_lines) / 2.0f - 0.5f);
@@ -263,7 +263,7 @@ namespace TEngine::Text {
         }
 
         void draw_string_line(BitmapFont* f, std::string_view line, float x, float y, float scale, float angle, TextFlipMode flipmode) {
-            const int actual_size = f->tile_size() * scale;
+            const auto actual_size = f->tile_size() * scale;
             // version that works fine, with only per-character rotations (keep it here just in case)
             // int len = static_cast<int>(line.length());
             // for (int i = 0; i < len; ++i) {

@@ -415,7 +415,7 @@ namespace Tetris::States {
         }
         size_t len = int64_len(highscore);
         auto tmp = m_leaderboard.size();
-        int extra_off = m_has_highscore ? tmp + 1 : tmp;
+        int extra_off = static_cast<int>(m_has_highscore ? tmp + 1 : tmp);
         extra_off = std::max(10, extra_off);
 
         float text_scale = 2.75f;

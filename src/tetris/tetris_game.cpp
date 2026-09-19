@@ -268,7 +268,7 @@ namespace Tetris {
         // undo test move
         m_current.move(Vec2{0,1});
         // m_piece_lock.piece_alpha = std::max(m_piece_lock.timer.get_time_left() * 2.0, 0.2);
-        m_piece_lock.piece_alpha = TEngine::fmap_to_range(0, 0.5, 0.25, 1, m_piece_lock.timer.get_time_left());
+        m_piece_lock.piece_alpha = TEngine::fmap_to_range(0.0f, 0.5f, 0.25f, 1.0f, m_piece_lock.timer.get_time_left());
         // NOTE - issues with this part may be caused by the input handling that happens outside of this class
         if (is_downwards_obstructed) {
             m_piece_lock.prev_y = m_current.get_position().y + m_current.get_min().y;
@@ -855,7 +855,8 @@ namespace Tetris {
         }
         // if we implement animations, this will still run at the very end of it
         // also, use this to calculate the points
-        ranges_to_remove[count++] = std::make_pair(prev, curr);
+        ranges_to_remove[count] = std::make_pair(prev, curr);
+        count++;
         return count;
     }
 
