@@ -1,17 +1,14 @@
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_keyboard.h>
 #include <filesystem>
 #include <array>
-#include <typeindex>
-#include <utility>
 #include <memory>
 
 #include "appstate.hpp"
 #include "engine/events.hpp"
 #include "engine/tengine.hpp"
 #include "engine/text/fonts.hpp"
-#include "engine/text/text_renderer.hpp"
 #include "engine/texture.hpp"
-#include "engine/utils.hpp"
 #include "engine/silly3D/silly_3D.hpp"
 #include "tetris/tetris_piece3d.hpp"
 #include "tetris/tetris_state_machines/tetris_game_sm.hpp"
@@ -21,7 +18,7 @@ struct Experimental {
     TEngine::Silly3D::SillyInstance3D instance;
     TEngine::Silly3D::SillyInstance3D instance2;
 
-    TEngine::Text::BitmapFont fnt;
+    TEngine::Text::BitmapFont* fnt;
 };
 
 namespace fs = std::filesystem;
@@ -52,7 +49,9 @@ SDL_AppResult AppState::setup_app() {
 
     __testing = new Experimental();
     silly_assets3d.set_renderer(window.renderer);
-
+    // TODO - specialize formatters for the types in TEngine
+    // std::cout << std::format("Color: {}", TEngine::Color{0,0,0}) << std::endl;
+    // static_assert(std::is_default_constructible_v<TEngine::Color>);
     using namespace Tetris::Tetrimino;
     const auto v = std::array{
         Type::I,
@@ -60,8 +59,8 @@ SDL_AppResult AppState::setup_app() {
         Type::L,
         Type::O,
         Type::S,
+        Type::Z,
         Type::T,
-        Type::Z
     };
     
     for (const auto type : v) {
@@ -86,8 +85,8 @@ SDL_AppResult AppState::setup_app() {
     tetris_keys.setup_keys(Tetris::Keybinds::Settings::Default);
     game = std::make_unique<Tetris::Game>(
         window.renderer,
-        window.width, window.height,
-        static_cast<float>(window.width) / 32.0f,
+        window.logical_width, window.logical_height,
+        static_cast<float>(window.logical_width) / 32.0f,
         &font,
         mino_texture.get()
     );
@@ -101,10 +100,11 @@ SDL_AppResult AppState::setup_app() {
         &font,
         leaderboard,
         pieces3dwire,
-        pieces3dfill
+        pieces3dfill,
+        SDL_GetWindowID(window.window)
     );
 
-    // game_sm->switch_to(Tetris::States::STATE_MAIN_MENU);
+    // game_sm->switch_to(Tetris::States::STATE_GAMEOVER);
     
     // TODO - make this constructor explicit
     // __testing->sillymodel = &silly_assets3d.load_model(
@@ -122,9 +122,16 @@ SDL_AppResult AppState::setup_app() {
 
     // __testing->instance2 = __testing->instance;
     // __testing->instance2.position = Vec3{-2, 0, 4};
-    __testing->fnt = Text::BitmapFont::load_font(fonts_root / "JoustFont", 8, window.renderer, SDL_SCALEMODE_NEAREST, {0,0,0,255});
+    __testing->fnt = &font;
     return SDL_APP_CONTINUE;
 }
+
+AppState::~AppState() {
+    // SDL_StopTextInput(window.window);
+    TEngine::end_window(window);
+    delete __testing;
+}
+
 
 static double lim = 1.0/(20);
 // static double lim = 0;
@@ -154,7 +161,9 @@ SDL_AppResult AppState::update_and_draw() {
     acc += delta;
     // Text::BitmapFontRenderer::draw_string_line(&__testing->fnt, "tetris", 0, 0, 10, ang, Text::TextFlipMode::None);
     // Text::BitmapFontRenderer::draw_string_line(&__testing->fnt, "hold", 0, 0, static_cast<float>(window.width) / 32.0f / 11.5f, 0, Text::TextFlipMode::None);
-    // Text::BitmapFontRenderer::draw_int64(&__testing->fnt, 1234, 0, 0, 10, ang);
+    // Color old = Text::BitmapFontRenderer::set_text_color_mod(&__testing->fnt, TEngine::TUtils::color_from_hex("#FF0000"));
+    // Text::BitmapFontRenderer::draw_int64(&__testing->fnt, 1234, 0, 0, 10, 0);
+    // Text::BitmapFontRenderer::set_text_color_mod(&__testing->fnt, old);
     ang += ((SDL_PI_F / 2.0f) * delta);
     if (acc >= lim) {
         __testing->instance.rotate_y((SDL_PI_F / 2.0f) * acc);
@@ -170,16 +179,21 @@ SDL_AppResult AppState::update_and_draw() {
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
-AppState::~AppState() {
-    TEngine::end_window(window);
-    delete __testing;
-}
-
 void AppState::raise_event(SDL_Event* event) {
     using namespace TEngine::Events;
     Tetris::States::TetrisStateMachine& recv = *(game_sm.get());
 
     switch (event->type) {
+        case SDL_EVENT_TEXT_INPUT: {
+            forward_event<TextInputEvent>(recv, event->text.text);
+        } break;
+        case SDL_EVENT_TEXT_EDITING: {
+            forward_event<TextEditingEvent>(recv,
+                event->edit.text,
+                event->edit.start,
+                event->edit.length
+            );
+        } break;
         case SDL_EVENT_KEY_DOWN: {
             if (event->key.repeat) {
                 forward_event<KeyRepeatEvent>(recv, event->key.scancode);
@@ -228,7 +242,7 @@ void AppState::raise_event(SDL_Event* event) {
                 event->window.data2
             );
         } break;
-        
+
         default: break;
     }
 }

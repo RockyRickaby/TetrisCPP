@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tengine.hpp"
+#include <cstdint>
 #include <functional>
 #include <typeindex>
 #include <variant>
@@ -21,6 +22,7 @@ namespace TEngine {
             KeyPressed, KeyRepeat, KeyReleased,
             MousePressed, MouseReleased, MouseMoved, MouseWheel,
             WindowResized,
+            TextInput, TextEditing
         };
 
         // All main events have to implement this interface to work
@@ -153,6 +155,30 @@ namespace TEngine {
             const int width;
             const int height;
             EVENT_CLASS_TYPE(WindowResized)
+        };
+
+        class TextInputEvent : public IEvent {
+        public:
+            TextInputEvent(const char* text) : text{text} {}
+
+            const std::string text;
+
+            EVENT_CLASS_TYPE(TextInput)
+        };
+
+        class TextEditingEvent : public IEvent {
+        public:
+            TextEditingEvent(const char* text, std::int32_t start, std::int32_t length) :
+                text{text},
+                start{start},
+                length{length}
+            {}
+
+            const std::string text;
+            const std::int32_t start;
+            const std::int32_t length;
+
+            EVENT_CLASS_TYPE(TextEditing)
         };
 
         // not really necessary unless polymorphic event listeners are neeed.

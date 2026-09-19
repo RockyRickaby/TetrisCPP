@@ -125,8 +125,15 @@ namespace Tetris::States {
 
     class GameOverState final : public TEngine::StateMachine::State {
     public:
-        GameOverState(TetrisStateMachine *sm, Game* game, SDL_Renderer *renderer, TEngine::Text::BitmapFont* font, Score::Leaderboard& leaderboard, std::span<Tetris::Piece3D> blocks_wireframe) :
-            m_has_highscore(false),
+        GameOverState(
+            TetrisStateMachine *sm,
+            Game* game,
+            SDL_Renderer *renderer,
+            TEngine::Text::BitmapFont* font,
+            Score::Leaderboard& leaderboard,
+            std::span<Tetris::Piece3D> blocks_wireframe,
+            SDL_WindowID window_id
+        ) :
             m_game_ptr{game},
             m_sm_ptr{sm},
             // m_input_event_handler(input_event_h),
@@ -142,7 +149,14 @@ namespace Tetris::States {
             m_leaderboard_transition_delay{0},
             m_leaderboard(leaderboard),
             m_blocks_framerate(1.0f/20.0f, true),
-            m_switch_block{1.5f, true}
+            m_switch_block{2.0f, true},
+            m_player_name{""},
+            m_blackscreen_pos{},
+            m_window_id(window_id),
+            m_has_highscore(false),
+            m_typing_name{false},
+            m_quitting{false},
+            m_curr_ch{'a'}
         {}
 
         void enter(void) override;
@@ -153,7 +167,6 @@ namespace Tetris::States {
         void reset(void) override;
         void exit(void) override;
     private:
-        bool m_has_highscore;
         Game *m_game_ptr;
         TetrisStateMachine *m_sm_ptr;
         TEngine::Text::BitmapFont* m_font;
@@ -167,10 +180,21 @@ namespace Tetris::States {
         TEngine::OneShotTimer m_highscore_delay;
         TEngine::OneShotTimer m_leaderboard_transition_delay;
         Score::Leaderboard m_leaderboard;
-        Score::InMemoryLeaderboard m_lb_storage;
+        Score::OnDiskLeaderboard m_lb_storage{"leaderboard.file"};
 
         TEngine::Countdown m_blocks_framerate;
         TEngine::Countdown m_switch_block;
+
+        std::string m_player_name;
+        TEngine::Vec2 m_blackscreen_pos;
+
+        SDL_WindowID m_window_id;
+        bool m_has_highscore;
+        bool m_typing_name;
+        bool m_quitting;
+        char m_curr_ch;
+
+        void handle_scancode(SDL_Scancode code);
     };
 
 
@@ -192,7 +216,8 @@ namespace Tetris::States {
             TEngine::Text::BitmapFont* font,
             Score::Leaderboard& leaderboard,
             std::span<Tetris::Piece3D> blocks_wireframe,
-            std::span<Tetris::Piece3D> blocks_filled
+            std::span<Tetris::Piece3D> blocks_filled,
+            SDL_WindowID window_id
         );
         void update(double delta_t) override;
         // void handle_input(void) override { m_current->handle_input(); }

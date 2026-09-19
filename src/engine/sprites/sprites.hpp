@@ -51,7 +51,7 @@ namespace TEngine::Sprites {
         int atlas_width() const { return m_atlas_w; }
         int atlas_height() const { return m_atlas_h; }
         SDL_Renderer* get_renderer(void) const { return m_renderer; }
-        SDL_Texture* get_texture(void) const { return m_texture.get(); }
+        TextureWrapper& get_texture(void) { return m_texture; }
 
         // stores an offset pair associated with a sprite_id.
         // overwrites previously defined offsets if any are present.
@@ -112,7 +112,7 @@ namespace TEngine::Sprites {
     };
     
     // useful just for not having to manage atlases manually. entities are on our own, though
-    class SpriteManager {
+    class SpriteManager final {
     public:
         SpriteManager() : m_renderer{nullptr} {}
         SpriteManager(SDL_Renderer* renderer) : m_renderer{renderer} {}

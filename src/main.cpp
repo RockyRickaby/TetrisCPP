@@ -1,3 +1,4 @@
+#include <SDL3/SDL_events.h>
 #define SDL_MAIN_USE_CALLBACKS 1  /* use the callbacks instead of main() */
 #include <SDL3/SDL.h> // needed
 #include <SDL3/SDL_main.h> // needed
@@ -24,7 +25,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         if (event->key.key == SDLK_Q) {
             return SDL_APP_SUCCESS;
         }
-    } 
+    }
     // else if (event->type == SDL_EVENT_WINDOW_MOVED) {
         // std::cout << TEngine::Vec2{static_cast<float>(event->window.data1), static_cast<float>(event->window.data2)} << std::endl;
         // event->window.data1;

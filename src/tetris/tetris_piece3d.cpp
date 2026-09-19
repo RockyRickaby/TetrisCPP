@@ -21,7 +21,7 @@ namespace Tetris {
         bool should_shift = type == Tetrimino::Type::O || type == Tetrimino::Type::S || type == Tetrimino::Type::Z;
         bool should_rotate = type == Tetrimino::Type::None && false;
         auto def_pos = TEngine::Vec3{0,0,4};
-        auto def_rot = TEngine::Vec3{0,-SDL_PI_F / 4.0f,0};
+        auto def_rot = TEngine::Vec3{0,0,0};
         if (should_rotate) {
             def_rot += {0, -SDL_PI_F / 2.0f, 0};
         }

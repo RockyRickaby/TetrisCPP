@@ -1,12 +1,63 @@
+#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_scancode.h>
+#include <array>
 
 #include "tetris_game_sm.hpp"
 #include "../../engine/text/text_renderer.hpp"
 
+// just messing around with macros
+// https://en.wikipedia.org/wiki/X_macro
+#define STRING_LITERALS \
+    X(__STR_HIGHSCORE, "new highscore") \
+    X(__STR_GAMEOVER, "game over") \
+    X(__STR_PAUSE, "pause") \
+    X(__STR_GO, "go") \
+    X(__STR_LEADERBOARD, "leaderboard") \
+    X(__STR_RANK, "rank") \
+    X(__STR_PLAYER, "player") \
+    X(__STR_SCORE, "score") 
+#define X(id, str) static constexpr std::string_view id = str;
+STRING_LITERALS
+#undef X
+#undef STRING_LITERALS
+
+static constexpr std::array __RANKS_ORDINAL = {
+    "1st",
+    "2nd",
+    "3rd",
+    "4th",
+    "5th",
+    "6th",
+    "7th",
+    "8th",
+    "9th",
+    "10th",
+};
+
+// no need for macros
+// static constexpr std::string_view __STR_HIGHSCORE = "new highscore";
+// static constexpr std::string_view __STR_GAMEOVER = "game over";
+// static constexpr std::string_view __STR_PAUSE = "pause";
+// static constexpr std::string_view __STR_GO = "go";
+// static constexpr std::string_view __STR_LEADERBOARD = "leaderboard";
+
+static size_t int64_len(std::int64_t num) {
+    std::array<char, 64> buffer{};
+    // std::fill(std::begin(buffer), std::end(buffer), 0);
+    std::to_chars_result res = std::to_chars(buffer.data(), buffer.data() + buffer.size(), num);
+    if (res.ec == std::errc::value_too_large) {
+        return 0;
+    }
+    std::size_t len = static_cast<std::size_t>(res.ptr - buffer.data());
+    return len;
+}
+
 // TODO - have a working implementation of these that actually makes sense
 namespace Tetris::States {
     void MenuState::enter() {
+        reset();
         tmp_counter.time = 10;
         m_read_any = true;
     }
@@ -41,7 +92,6 @@ namespace Tetris::States {
     }
 
     void MenuState::exit() {
-        reset();
     }
 
     bool MenuState::OnKeyPressed(TEngine::Events::KeyPressedEvent& event) {
@@ -124,17 +174,25 @@ namespace Tetris::States {
         if (m_begin_countdown.get_time_left() > 0) {
             TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_begin_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale);
         } else if (!m_go_count.done(0)) {
-            const char go[] = "go!";
-            size_t twid = sizeof(go) - 1;
             // scale = 5;
-            TEngine::Text::BitmapFontRenderer::draw_string_line(m_font, go, (960 - twid * m_font->tile_size() * scale) / 2.0f, (720 - m_font->tile_size() * scale) / 2.0f, scale);
+            TEngine::Text::BitmapFontRenderer::draw_string_line(
+                m_font,
+                __STR_GO,
+                (960 - __STR_GO.size() * m_font->tile_size() * scale) / 2.0f,
+                (720 - m_font->tile_size() * scale) / 2.0f,
+                scale
+            );
         }
 
         if (m_pause) {
-            const char pause[] = "pause";
-            size_t twid = sizeof(pause) - 1;
             // scale = 5;
-            TEngine::Text::BitmapFontRenderer::draw_string_line(m_font, pause, (960 - twid * m_font->tile_size() * scale) / 2.0f, (720 - m_font->tile_size() * scale) / 2.0f, scale);
+            TEngine::Text::BitmapFontRenderer::draw_string_line(
+                m_font,
+                __STR_PAUSE,
+                (960 - __STR_PAUSE.size() * m_font->tile_size() * scale) / 2.0f,
+                (720 - m_font->tile_size() * scale) / 2.0f,
+                scale
+            );
         }
         if (m_pause_countdown.get_time_left() > 0 && !m_pause) {
             TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_pause_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale);
@@ -168,6 +226,7 @@ namespace Tetris::States {
         } else if (m_tetris_keys->keys.pause.scancode == event.scancode) {
             // m_game_ptr->do_pause();
             m_pause = !m_pause;
+            m_go_count.time = 0; // prevent GO! from being rendered when the game is paused right after starting
             return true;
         }
         return false;
@@ -181,9 +240,11 @@ namespace Tetris::States {
 
 
     void GameOverState::enter(void) {
-        reset();
         m_leaderboard.load_scores(m_lb_storage);
         m_has_highscore = m_leaderboard.is_new_highscore(m_game_ptr->get_score());
+        reset();
+        // TODO - enable input from here OR after the leaderboard is shown
+        // SDL_StartTextInput(SDL_GetWindowFromID(m_window_id));
     }
     void GameOverState::update(double delta_t) {
         if (m_gameover_timer.done(delta_t)) {
@@ -197,14 +258,28 @@ namespace Tetris::States {
             if (!m_leaderboard_transition_delay.done(delta_t)) {
                 return;
             }
+            m_typing_name = m_player_name.length() < Score::ScoreEntry::player_name_max_length;
         } else {
             m_leaderboard_transition_delay.time = 0;
         }
 
+        if (m_blackscreen_pos.x <= -10000000) {
+            m_blackscreen_pos = {};
+        } else if (m_quitting && m_blackscreen_pos.y >= 720) {
+            m_blackscreen_pos.y = -720;
+        } else if ((m_quitting && m_blackscreen_pos.y <= 0) || (!m_quitting && m_blackscreen_pos.y < 720)) {
+            m_blackscreen_pos.y += 720 * 1.5f * delta_t;
+        } else if (m_quitting && m_blackscreen_pos.y >= 0) {
+            m_sm_ptr->switch_to(STATE_MAIN_MENU);
+        }
+
         if (m_blocks_framerate.done(delta_t)) {
+            // if (m_blackscreen_pos.y < 720) {
+            //     m_blackscreen_pos.y += 720 *1 * m_blocks_framerate.get_countdown_time();
+            // }
             for (auto& p : m_blocks_wireframe) {
                 auto& ins = p.instance;
-                ins.rotate_y(-SDL_PI_F/4.0f * m_blocks_framerate.get_countdown_time());
+                ins.rotate_y(SDL_PI_F/8.0f * m_blocks_framerate.get_countdown_time());
             }
         }
     
@@ -218,67 +293,195 @@ namespace Tetris::States {
     void GameOverState::event(TEngine::Events::IEvent& event) {
         using namespace TEngine::Events;
         EventDispatcher ed{event};
-        ed.dispatch<KeyPressedEvent>([this](auto&) -> bool {
-            if (!m_highscore_delay.done(0)) {
+        ed.dispatch<KeyPressedEvent>([this](KeyPressedEvent& key) -> bool {
+            if (m_typing_name) {
+                handle_scancode(key.scancode);
+            } else if (!m_gameover_timer.done(0)) {
+                return false;
+            } else if (!m_highscore_delay.done(0)) {
                 m_highscore_delay.time = 0;
             } else if (!m_leaderboard_transition_delay.done(0)) {
                 m_leaderboard_transition_delay.time = 0;
-            } else if (m_gameover_timer.done(0)) {
-                m_sm_ptr->switch_to(STATE_MAIN_MENU);
+            } else {
+                // m_sm_ptr->switch_to(STATE_MAIN_MENU);
+                m_quitting = true;
             }
             return true;
+        });
+        ed.dispatch<KeyRepeatEvent>([this](KeyRepeatEvent& key){
+            if (m_typing_name) {
+                handle_scancode(key.scancode);
+                return true;
+            }
+            return false;
         });
     }
     void GameOverState::draw(void) {
         using namespace TEngine::Text;
         if (m_highscore_delay.time > 0 && m_leaderboard_transition_delay.time > 0) {
-            BitmapFontRenderer::draw_string_line(m_font, "GAME OVER", m_gameover_text_pos.x, m_gameover_text_pos.y, 5);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_GAMEOVER, m_gameover_text_pos.x, m_gameover_text_pos.y, 5);
         }
 
         if (m_has_highscore && m_highscore_delay.time == 0 && m_leaderboard_transition_delay.time > 0) {
-            BitmapFontRenderer::draw_string_line(m_font, "new highscore", m_newscore_text_pos.x, m_newscore_text_pos.y, 5);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_HIGHSCORE, m_newscore_text_pos.x, m_newscore_text_pos.y, 5);
         }
-
+        
+        float text_scale = 2.75f;
+        float ranks_offset = 3;
+        float players_offset = 4;
+        float scores_offset = 15;
         if (m_leaderboard_transition_delay.time == 0) {
-            auto part = std::upper_bound(m_leaderboard.begin(), m_leaderboard.end(), m_game_ptr->get_score(),
-                [](const auto lhs, const auto& rhs){
-                    return lhs > std::get<0>(rhs);
-                }
-            );
+            SDL_FRect black = {
+                m_blackscreen_pos.x,
+                m_blackscreen_pos.y,
+                960,
+                720
+            };
+            m_block->draw_wireframe();
             float y_off = 0;
-            const auto draws = [this, &y_off](auto begin, auto end){
-                for (auto it = begin; it != end; ++it) {
+            int count = m_has_highscore ? 1 : 0;
+            BitmapFontRenderer::draw_string_line(m_font, __STR_RANK, m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_PLAYER, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_SCORE, m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale);
+            size_t total_ranks = m_leaderboard.size();
+            if (m_has_highscore && total_ranks < 10) {
+                total_ranks += 1;
+            }
+            for (size_t i = 0; i < total_ranks; i++) {
+                BitmapFontRenderer::draw_int64(m_font, i + 1, m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                BitmapFontRenderer::draw_char(m_font, '.', m_leaderboard_offset.x - ((i + 1) >= 10 ? ranks_offset - 2 : ranks_offset - 1) * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                // BitmapFontRenderer::draw_string_line(m_font, __RANKS_ORDINAL.at(i), m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                y_off += text_scale * 12;
+            }
+            y_off = 0;
+            const auto draws = [this, text_scale, players_offset, scores_offset, &y_off, &count](auto&& begin, auto&& end){
+                for (auto it = begin; it != end && count < 10; ++it) {
                     const auto& [score, name] = *it;
-                    BitmapFontRenderer::draw_string_line(m_font, name, m_leaderboard_offset.x, m_leaderboard_offset.y + y_off, 4);
-                    BitmapFontRenderer::draw_int64(m_font, score, m_leaderboard_offset.x + 10 * 8* 4, m_leaderboard_offset.y + y_off, 4);
+                    BitmapFontRenderer::draw_string_line(m_font, name, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                    BitmapFontRenderer::draw_int64(m_font, score, m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
                 
-                    y_off += 4 * 11;
+                    y_off += text_scale * 12;
+                    count++;
                 }
             };
-            draws(m_leaderboard.begin(), part);
-            BitmapFontRenderer::draw_int64(m_font, m_game_ptr->get_score(), m_leaderboard_offset.x + 10 * 8* 4, m_leaderboard_offset.y + y_off, 4);
-            y_off += 4 * 11;
-            draws(part, m_leaderboard.end());
-
-            m_block->draw_wireframe();
+            BitmapFontRenderer::draw_string_line(m_font,
+                __STR_LEADERBOARD,
+                (960 - ((__STR_LEADERBOARD.size()) * m_font->tile_size() * text_scale)) / 2.0f,
+                m_leaderboard_offset.y - 4.5f  * text_scale * 12,
+                text_scale);
+            if (m_has_highscore) {
+                auto part = std::upper_bound(m_leaderboard.begin(), m_leaderboard.end(), m_game_ptr->get_score(),
+                    [](const auto lhs, const auto& rhs){
+                        return lhs > std::get<0>(rhs);
+                    }
+                );
+                draws(m_leaderboard.begin(), part);
+                BitmapFontRenderer::draw_string_line(m_font, m_player_name, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                BitmapFontRenderer::draw_int64(m_font, m_game_ptr->get_score(), m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                // TODO - draw a cursor instead of blinking and changing colors
+                if (m_curr_ch) {
+                    SDL_FRect text_cursor = {
+                        m_leaderboard_offset.x + (m_player_name.length() + players_offset) * text_scale * m_font->tile_size(),
+                        m_leaderboard_offset.y + y_off + text_scale * m_font->tile_size(),
+                        text_scale * (m_font->tile_size() - 1),
+                        text_scale
+                    };
+                    if (m_switch_block.get_time_left() >= 0.75f) {
+                        SDL_SetRenderDrawColor(m_renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+                        SDL_RenderFillRect(m_renderer, &text_cursor);
+                    }
+                    BitmapFontRenderer::draw_char(m_font, m_curr_ch, m_leaderboard_offset.x + (m_player_name.length() + players_offset) * text_scale * m_font->tile_size(), m_leaderboard_offset.y + y_off, text_scale);
+                }
+                y_off += text_scale * 12;
+                draws(part, m_leaderboard.end());
+            } else {
+                draws(m_leaderboard.begin(), m_leaderboard.end());
+            }
+            SDL_SetRenderDrawColor(m_renderer, 0,0,0, SDL_ALPHA_OPAQUE);
+            SDL_RenderFillRect(m_renderer, &black);
         }
     }
 
     void GameOverState::reset(void) {
-        m_gameover_timer.time = 5;
-        m_highscore_delay.time = 3;
+        m_gameover_timer.time = 3;
+        m_highscore_delay.time = m_has_highscore ? 3 : 5;
         m_leaderboard_transition_delay.time = 4;
-        m_gameover_text_pos = { (960 - (5 * m_font->tile_size() * (sizeof("game over") - 1))) / 2.0f, (720 - 5 * m_font->tile_size()) / 2.0f };
-        m_newscore_text_pos = { (960 - (5 * m_font->tile_size() * (sizeof("new highscore") - 1))) / 2.0f, (720 - 5 * m_font->tile_size()) / 2.0f };
-        m_leaderboard_offset = {};
+        m_gameover_text_pos = { (960 - (5 * m_font->tile_size() * __STR_GAMEOVER.size())) / 2.0f, (720 - 5 * m_font->tile_size()) / 2.0f };
+        m_newscore_text_pos = { (960 - (5 * m_font->tile_size() * __STR_HIGHSCORE.size())) / 2.0f, (720 - 5 * m_font->tile_size()) / 2.0f };
+        
+        std::int64_t highscore = m_leaderboard.top_score();
+        if (m_has_highscore && m_game_ptr->get_score() > highscore) {
+            highscore = m_game_ptr->get_score();
+        }
+        size_t len = int64_len(highscore);
+        auto tmp = m_leaderboard.size();
+        int extra_off = m_has_highscore ? tmp + 1 : tmp;
+        extra_off = std::max(10, extra_off);
+
+        float text_scale = 2.75f;
+        float ranks_offset = 3;
+        float scores_offset = 15;
+        m_leaderboard_offset = {
+            (960 - (((scores_offset - ranks_offset) * m_font->tile_size() * text_scale) + len * m_font->tile_size() * text_scale)) / 2.0f,
+            (720 - ((extra_off - 3) * text_scale * 12)) / 2.0f
+        };
         m_block = m_blocks_wireframe.rbegin();
 
         m_blocks_framerate.reset();
         m_switch_block.reset();
+
+        m_player_name = "";
+        m_curr_ch = 'a';
+        m_typing_name = false;
+        m_quitting = false;
+
+        m_blackscreen_pos = {-10000000,-10000000};
     }
 
     void GameOverState::exit(void) {
+        if (m_has_highscore) {
+            m_leaderboard.push_score(m_game_ptr->get_score(), m_player_name);
+        }
         m_leaderboard.flush_scores(m_lb_storage);
+        // TODO - disable text input here
+        // SDL_StopTextInput(SDL_GetWindowFromID(m_window_id));
+    }
+
+    void GameOverState::handle_scancode(SDL_Scancode code) {
+        bool handle_return = false;
+        char tmp = m_curr_ch;
+        switch (code) {
+            case SDL_SCANCODE_DOWN: {
+                m_curr_ch = (m_curr_ch - 'a' - 1 + 26) % 26 + 'a';
+            } break;
+            case SDL_SCANCODE_UP: {
+                m_curr_ch = (m_curr_ch - 'a' + 1 + 26) % 26 + 'a';
+            } break;
+            case SDL_SCANCODE_BACKSPACE: {
+                if (!m_player_name.empty()) m_player_name.pop_back();
+            } break;
+            case SDL_SCANCODE_SPACE: {
+                tmp = ' ';
+                handle_return = true;
+            } break;
+            case SDL_SCANCODE_RETURN: {
+                handle_return = true;
+            } break;
+            case SDL_SCANCODE_KP_ENTER: {
+                handle_return = true;
+            } break;
+            
+            default: break;
+        }
+
+        if (handle_return) {
+            m_player_name += tmp;
+            // m_curr_ch = !std::isalnum(m_curr_ch) ? 'a' : m_curr_ch;
+            if (m_player_name.length() >= Score::ScoreEntry::player_name_max_length) {
+                m_typing_name = false;
+                m_curr_ch = 0;
+            }
+        }
     }
 
 
@@ -297,11 +500,12 @@ namespace Tetris::States {
         TEngine::Text::BitmapFont* font,
         Score::Leaderboard& leaderboard,
         std::span<Tetris::Piece3D> blocks_wireframe,
-        std::span<Tetris::Piece3D> blocks_filled
+        std::span<Tetris::Piece3D> blocks_filled,
+        SDL_WindowID window_id
     ) :
         m_runstate{this, game_ptr, tetris_keys, font, renderer},
         m_menustate{this, game_ptr, menu_ptr, tetris_keys, renderer, font},
-        m_gameoverstate(this, game_ptr, renderer, font, leaderboard, blocks_wireframe),
+        m_gameoverstate(this, game_ptr, renderer, font, leaderboard, blocks_wireframe, window_id),
         m_states{ &m_menustate, &m_runstate, &m_gameoverstate },
         m_current{m_states.at(STATE_MAIN_MENU)},
         m_blocks_wireframe(blocks_wireframe),

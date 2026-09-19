@@ -6,6 +6,7 @@
 #include "tetris_game.hpp"
 #include "../engine/text/text_renderer.hpp"
 #include "../engine/utils.hpp"
+#include "tetris_pieces.hpp"
 
 // this may not be good practice, but whatever
 using namespace TEngine; // Vec2, Color, Text
@@ -32,9 +33,19 @@ namespace Tetris {
         m_verts.reserve(4 * (ROWS - 2) * COLUMNS);
         m_indices.reserve(6 * (ROWS - 2) * COLUMNS);
         spawn_next_piece();
+
+        m_update_playfield_gameover.black_screen_dimensions = {
+            static_cast<float>(screen_width),
+            static_cast<float>(screen_height)
+        };
     }
 
     void Game::restart(void) {
+        m_nextrot = Tetrimino::Rotation::None;
+        m_hard_drop = false;
+        m_hold_piece = false;
+        m_nextdir = {};
+
         m_playfield_matrix.fill(Color{});
         m_line_block_count.fill(0);
         
@@ -69,7 +80,7 @@ namespace Tetris {
 
         const auto gameover_fn = [this](){
             m_update_state = GameUpdateState::GGameover;
-            return false;
+            return true;
         };
 
         bool need_regen_playfield = false;
@@ -78,6 +89,8 @@ namespace Tetris {
             case GameUpdateState::GPiece: {
                 bool updated = update_fn(placed);
                 if (!updated) {
+                    m_piece_lock.reset();
+                    place_current_piece();
                     return gameover_fn();
                 }
                 if (placed) {
@@ -109,7 +122,9 @@ namespace Tetris {
                     // because the animation isn't "instantaneous", set countdown to almost done
                     // so that the piece spawns almost immediately after the playfield is updated,
                     // making the game a little bit more speedy
-                    m_piece_spawn.done(m_piece_spawn.get_countdown_time() - 0.0001);
+                    if (m_piece_spawn.get_countdown_time() > 0) {
+                        m_piece_spawn.done(m_piece_spawn.get_countdown_time() - 0.0001);
+                    }
                 }
             } break;
 
@@ -125,7 +140,11 @@ namespace Tetris {
 
             case GameUpdateState::GGameover: {
                 // restart();
-                return false;
+                if (m_update_playfield_gameover(this, delta_t)) {
+                    need_regen_playfield = true;
+                } else {
+                    return false;
+                }
             } break;
 
             default:
@@ -161,13 +180,12 @@ namespace Tetris {
         SDL_RenderClear(m_renderer);
         draw_playfield_grid();
         draw_playfield_blocks();
-        draw_piece(m_ghost, true, 128);
-        draw_piece(m_current);
+        if (m_ghost.get_position() != m_current.get_position()) {
+            draw_piece(m_ghost, true, 128);
+        }
+        draw_piece(m_current, true, static_cast<std::uint8_t>(m_piece_lock.piece_alpha * 255));
 
         float new_scale = m_scale / 1.5f;
-        // using namespace Text;
-        // 2.15
-        // 1.75
 
         draw_held_piece(
             m_held,
@@ -177,6 +195,8 @@ namespace Tetris {
         );
         m_pieces_bag->draw();
         draw_text_elements();
+
+        m_update_playfield_gameover.draw(this);
     }
 
     bool Game::try_move(bool &moved_down) {
@@ -244,6 +264,8 @@ namespace Tetris {
         bool is_downwards_obstructed = check_collision(m_current); // there might be...
         // undo test move
         m_current.move(Vec2{0,1});
+        // m_piece_lock.piece_alpha = std::max(m_piece_lock.timer.get_time_left() * 2.0, 0.2);
+        m_piece_lock.piece_alpha = TEngine::fmap_to_range(0, 0.5, 0.25, 1, m_piece_lock.timer.get_time_left());
         // NOTE - issues with this part may be caused by the input handling that happens outside of this class
         if (is_downwards_obstructed) {
             m_piece_lock.prev_y = m_current.get_position().y + m_current.get_min().y;
@@ -299,6 +321,8 @@ namespace Tetris {
         m_current = (*m_pieces_bag)(); 
         // piece spawns right on top (inside) another -> game over condition
         if (check_collision(m_current)) {
+            // TODO - //
+            place_piece(m_current);
             // m_game_over = true;
             m_current = {};
             return false;
@@ -314,20 +338,25 @@ namespace Tetris {
         return true;
     }
 
+    void Game::place_piece(const Tetrimino::Piece& p) {
+        for (Vec2 v : p) {
+            size_t x = static_cast<size_t>(v.x);
+            size_t y = static_cast<size_t>(v.y);
+            m_playfield_matrix[x + y * COLUMNS] = p.get_color();
+            m_line_block_count[y] += 1;
+        }
+    }
+
     // safe to call if the current piece is empty
     bool Game::place_current_piece(void) {
         // piece placed above the playfield -> game over condition
         if ((m_current.get_min() + m_current.get_position()).y >= ROWS - 2) {
             // m_game_over = true;
+            place_piece(m_current);
             m_current = {};
             return false;
         }
-        for (Vec2 v : m_current) {
-            size_t x = static_cast<size_t>(v.x);
-            size_t y = static_cast<size_t>(v.y);
-            m_playfield_matrix[x + y * COLUMNS] = m_current.get_color();
-            m_line_block_count[y] += 1;
-        }
+        place_piece(m_current);
         // TODO - just a warning
         m_ghost = {};
         m_current = {};

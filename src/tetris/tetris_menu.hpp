@@ -2,7 +2,6 @@
 
 #include <span>
 
-#include "../engine/silly3D/silly_3D.hpp"
 #include "../engine/events.hpp"
 #include "../engine/text/fonts.hpp"
 #include "tetris_input.hpp"

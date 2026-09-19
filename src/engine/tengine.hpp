@@ -221,6 +221,8 @@ namespace TEngine {
         friend std::ostream& operator<<(std::ostream& output, const Vec3& v);
     };
 
+    // TODO - move these to TEngine::Math, probably
+    // ... in a new file called tengine_math.hpp
     template<typename T>
     requires(requires(T a, float t){
         { a + a } -> std::same_as<T>;
@@ -246,6 +248,11 @@ namespace TEngine {
 
     inline Vec3 lerpv3(Vec3 a, Vec3 b, float t) {
         return __lerp_values(a, b, t);
+    }
+
+    inline float fmap_to_range(float input_begin, float input_end, float output_begin, float output_end, float t) {
+        float slope = (output_end - output_begin) / (input_end - input_begin);
+        return output_begin + slope * (t - input_begin);
     }
 
     // NOTE: SDL MUST hae been initialized prior to calling ANY function

@@ -36,16 +36,6 @@ static inline std::tuple<TEngine::Vec2, TEngine::Vec2> __gen_points_for_line(int
     return std::make_tuple(point1, point2);
 };
 
-template<typename FN, typename ...Args>
-static inline void __draw_text_colored(TEngine::Text::BitmapFont* f, TEngine::Color color, FN function, Args&& ...args) {
-    auto* texture = f->get_texture_atlas().get_texture();
-    TEngine::Color mod;
-    SDL_GetTextureColorMod(texture, &mod.r, &mod.g, &mod.b);
-    SDL_SetTextureColorMod(texture, color.r, color.g, color.b);
-    function(f, std::forward<Args>(args)...);
-    SDL_SetTextureColorMod(texture, mod.r, mod.g, mod.b);
-}
-
 template<typename Number, typename... Args> requires(std::is_arithmetic_v<Number>)
 static inline void __draw_number(TEngine::Text::BitmapFont* f, Number num, float x, float y, float scale, float angle = 0, Args&&... args) {
     std::array<char, 64> num_buf{};
@@ -159,6 +149,14 @@ namespace TEngine::Text {
 
             SDL_SetRenderTarget(f->get_renderer(), nullptr);
             return {f->get_renderer(), num_texture};
+        }
+
+        Color set_text_color_mod(BitmapFont* f, Color color) {
+            auto* texture = f->get_texture_atlas().get_texture().get();
+            Color mod;
+            SDL_GetTextureColorMod(texture, &mod.r, &mod.g, &mod.b);
+            SDL_SetTextureColorMod(texture, color.r, color.g, color.b);
+            return mod;
         }
         
         // this one might be better than make_bitmap_text_ch in terms of resource usage
@@ -332,31 +330,6 @@ namespace TEngine::Text {
 
         void draw_double(BitmapFont* f, double num, float x, float y, float scale, float angle) {
             __draw_number(f, num, x, y, scale, angle, std::chars_format::fixed);
-        }
-
-
-        void draw_char_color(BitmapFont* f, char ch, float x, float y, float scale, Color color, float angle, TextFlipMode flipmode) {
-            __draw_text_colored(f, color, draw_char, ch, x, y, scale, angle, flipmode);
-        }
-    
-        void draw_string_color(BitmapFont* f, std::string_view str, float x, float y, float scale, Color color, float angle, TextFlipMode flipmode) {
-            __draw_text_colored(f, color, draw_string, str, x, y, scale, angle, flipmode);
-        }
-
-        void draw_string_line_color(BitmapFont* f, std::string_view str, float x, float y, float scale, Color color, float angle, TextFlipMode flipmode) {
-            __draw_text_colored(f, color, draw_string_line, str, x, y, scale, angle, flipmode);
-        }
-
-        void draw_int64_color(BitmapFont* f, std::int64_t num, float x, float y, float scale, Color color, float angle) {
-            __draw_text_colored(f, color, __draw_number<int>, num, x, y, scale, angle);
-        }
-        
-        void draw_float_color(BitmapFont* f, float num, float x, float y, float scale, Color color, float angle) {
-            __draw_text_colored(f, color, __draw_number<float, std::chars_format>, num, x, y, scale, angle, std::chars_format::fixed);
-        }
-
-        void draw_double_color(BitmapFont* f, double num, float x, float y, float scale, Color color, float angle) {
-            __draw_text_colored(f, color, __draw_number<double, std::chars_format>, num, x, y, scale, angle, std::chars_format::fixed);
         }
     }
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <SDL3/SDL_pixels.h>
 #include <memory>
 #include <unordered_map>
 #include <array>
@@ -8,6 +9,7 @@
 #include "tetris_bags.hpp"
 #include "tetris_pieces.hpp"
 #include "../engine/tengine.hpp"
+#include "../engine/utils.hpp"
 #include "../engine/text/fonts.hpp"
 
 namespace Tetris {
@@ -84,11 +86,13 @@ namespace Tetris {
             TEngine::Countdown timer = TEngine::Countdown{0.5, true};
             int moves = 15;
             float prev_y = -1;
+            float piece_alpha = 1.0f;
 
             void reset(void) {
                 timer.reset();
                 moves = 15;
                 prev_y = -1;
+                piece_alpha = 1.0f;
             }
         };
 
@@ -164,6 +168,65 @@ namespace Tetris {
             int get_ranges(Game *game_ptr, std::array<std::pair<int, int>, 4>& ranges_to_remove);
             int pull_rows(Game* game_ptr, std::array<std::pair<int, int>, 4>& ranges_to_remove, int size);
         };
+
+        struct PlayfieldUpdateRoutineGameOver {
+            TEngine::Countdown animation_timer{0.08, true};
+            TEngine::Vec2 black_screen_dimensions = {0, 0};
+            TEngine::Vec2 black_screen_pos = {-100000, -100000};
+
+            TEngine::OneShotTimer initial_delay{0.5};
+            int row = 0;
+            bool move_black_screen = false;
+
+            bool operator()(Game* game_ptr, double delta_t) {
+                if (!initial_delay.done(delta_t)) {
+                    return true;
+                }
+                if (move_black_screen) {
+                    if (black_screen_pos.y < -black_screen_dimensions.y) {
+                        black_screen_pos = {0, -black_screen_dimensions.y};
+                    }
+                    black_screen_pos.y += black_screen_dimensions.y * 2.0f * delta_t;
+                    if (black_screen_pos.y >= 0) {
+                        black_screen_pos = {-100000, -100000};
+                        move_black_screen = false;
+                        initial_delay.time = 0.5;
+                        row = 0;
+                        return false;
+                    }
+                    return true;
+                } else if (animation_timer.done(delta_t)) { // this timer auto-resets
+                    TEngine::Color fill = {};
+                    // this routine auto-resets..
+                    if (row >= ROWS + BUFFER) {
+                        // animation_timer.reset();
+                        move_black_screen = true;
+                        return true;
+                    }
+                    if (row < ROWS - 2) {
+                        fill = TEngine::TUtils::color_from_hex("#808080");
+                    }
+                    std::fill(
+                        game_ptr->m_playfield_matrix.begin() + row * COLUMNS,
+                        game_ptr->m_playfield_matrix.begin() + COLUMNS + row * COLUMNS,
+                        fill);
+                    row++;
+                }
+                return true;
+            }
+
+            void draw(Game* game_ptr) {
+                SDL_FRect r {
+                    .x = black_screen_pos.x,
+                    .y = black_screen_pos.y,
+                    .w = black_screen_dimensions.x,
+                    .h = black_screen_dimensions.y
+                };
+                SDL_SetRenderDrawColor(game_ptr->m_renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+                SDL_RenderFillRect(game_ptr->m_renderer, &r);
+            }
+        };
+
         SDL_Renderer* m_renderer;
         inline static constexpr TEngine::Vec2 __invalid_move_vec = { 0, 0 };
         
@@ -187,6 +250,7 @@ namespace Tetris {
         ScoreSystem m_scoreboard;
         PlayfieldUpdateRoutineAnimated m_update_playfield_routine;
         PlayfieldUpdateRoutineInstant m_update_playfield_instant;
+        PlayfieldUpdateRoutineGameOver m_update_playfield_gameover;
         // extended placement lock down variable
         // can also be used for infinite placement lock down or classic lock down if moves limit is ignored
         PieceLockdownTimer m_piece_lock;
@@ -217,6 +281,7 @@ namespace Tetris {
         void update_ghostpiece(void);
         bool update_playfield(double delta_t);
         bool spawn_next_piece(void);
+        void place_piece(const Tetrimino::Piece& p);
         bool place_current_piece(void);
         bool place_and_spawn_next_piece(void);
         bool check_within_bounds(const Tetrimino::Piece &p);
