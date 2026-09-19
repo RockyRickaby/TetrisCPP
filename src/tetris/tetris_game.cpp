@@ -48,6 +48,9 @@ namespace Tetris {
 
         m_playfield_matrix.fill(Color{});
         m_line_block_count.fill(0);
+
+        m_update_playfield_gameover.black_screen_pos = { -100000, -100000 };
+
         
         m_piece_drop_timer.reset();
         m_pieces_bag->reset();

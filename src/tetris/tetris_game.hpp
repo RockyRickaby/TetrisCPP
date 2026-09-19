@@ -188,7 +188,6 @@ namespace Tetris {
                     }
                     black_screen_pos.y += black_screen_dimensions.y * 2.0f * delta_t;
                     if (black_screen_pos.y >= 0) {
-                        black_screen_pos = {-100000, -100000};
                         move_black_screen = false;
                         initial_delay.time = 0.5;
                         row = 0;

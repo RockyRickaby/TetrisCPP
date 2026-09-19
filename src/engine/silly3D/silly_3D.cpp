@@ -510,7 +510,7 @@ namespace TEngine::Silly3D {
                 int faces = 0;
                 while (iss >> data) {
                     std::string_view vertidx{data};
-                    std::string_view texidx{vertidx.begin() + vertidx.find('/') + 1};
+                    std::string_view texidx{vertidx.begin() + vertidx.find('/') + 1, vertidx.begin() + vertidx.find_last_of('/')};
                     int vidx = -1;
                     int tidx = -1;
                     int nidx = -1;
@@ -520,7 +520,7 @@ namespace TEngine::Silly3D {
                         tidx -= 1;
                     }
                     if (has_normals) {
-                        std::string_view normidx{vertidx.begin() + vertidx.find_last_of('/') + 1};
+                        std::string_view normidx{vertidx.begin() + vertidx.find_last_of('/') + 1, vertidx.end() };
                         std::from_chars(normidx.data(), normidx.data() + normidx.size(), nidx);
                         nidx -= 1;
                     }

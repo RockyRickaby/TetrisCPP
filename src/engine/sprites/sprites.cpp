@@ -5,6 +5,10 @@
 #include "sprites.hpp"
 #include "../texture.hpp"
 
+#if !defined(__PRETTY_FUNCTION__) && !defined(__GNUC__)
+#define __PRETTY_FUNCTION__ __FUNCSIG__
+#endif
+
 namespace TEngine::Sprites {
     SpriteAtlas::SpriteAtlas(TextureWrapper&& texture, int tile_width, int tile_height, SDL_Renderer* renderer) :
         m_tile_w{tile_width},
@@ -54,8 +58,8 @@ namespace TEngine::Sprites {
     void SpriteAtlas::draw(int sprite_id, float offset_x, float offset_y, float scale, float angle, SpriteFlipMode flipmode) {
         auto [x, y] = m_id_to_offsets.at(sprite_id);
         SDL_FRect source = {
-            .x = static_cast<float>(x) * m_tile_w,
-            .y = static_cast<float>(y) * m_tile_h,
+            .x = static_cast<float>(x) * m_tile_w - 0.01f,
+            .y = static_cast<float>(y) * m_tile_h - 0.01f,
             .w = static_cast<float>(m_tile_w),
             .h = static_cast<float>(m_tile_h)
         };

@@ -53,7 +53,7 @@ namespace TEngine::TUtils {
     }
 
     // alpha is preserved, but converted from [0,255] to [0,1]
-    inline constexpr ColorHSB rgb_to_hsb(Color c) {
+    inline ColorHSB rgb_to_hsb(Color c) {
         float r = c.r / 255.0f;
         float g = c.g / 255.0f;
         float b = c.b / 255.0f;
@@ -85,12 +85,12 @@ namespace TEngine::TUtils {
         };
     }
 
-    inline constexpr ColorHSB hex_to_hsb(std::string_view hex, std::uint8_t alpha = 255) {
+    inline ColorHSB hex_to_hsb(std::string_view hex, std::uint8_t alpha = 255) {
         return rgb_to_hsb(color_from_hex(hex, alpha));
     }
 
     // alpha is preserved
-    inline constexpr Color hsb_to_rgb(const ColorHSB& c) {
+    inline Color hsb_to_rgb(const ColorHSB& c) {
         float r, g, b;
         float hue = c.hue;
         if (c.sat == 0) {

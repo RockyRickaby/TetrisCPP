@@ -127,7 +127,7 @@ namespace Tetris::Score {
                 {100000, "mauro"},
                 {80000, "da goat"},
                 {70000, "rohan"},
-                {60000, "makr"},
+                {60000, "mark"},
                 {50000, "daniel"},
                 {40000, "hwg"},
                 {30000, "kif"},
