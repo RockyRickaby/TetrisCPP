@@ -17,14 +17,19 @@ set(PROJECT_SOURCES
     src/tetris/tetris_state_machines/tetris_game_sm.cpp
     src/engine/tengine.cpp
     src/engine/texture.cpp
+    src/engine/sound/audio.cpp
+    src/engine/shapes/shapes.cpp
     src/engine/silly3D/silly_3D.cpp
     src/engine/state_machine.cpp
     src/engine/text/text_renderer.cpp
     src/engine/text/fonts.cpp
     src/engine/sprites/sprites.cpp
 )
-# Manually set one possible path to the SDL3 library on Windows systems
-set(WIN_SDL3_CPATH "C:/SDL3")
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
+
+include(Dependencies.cmake)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT WIN32)
     add_executable(${TARGET_MAIN})
@@ -33,37 +38,8 @@ else()
 endif()
 target_sources(${TARGET_MAIN} PRIVATE ${PROJECT_SOURCES})
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendored/SDL/CMakeLists.txt")
-    set(VENDORED_SDL_EXISTS ON)
-else()
-    message(STATUS "SDL submodule NOT found.")
-    set(VENDORED_SDL_EXISTS OFF)
-endif()
-# use vendored version by default if it exists unless defined otherwise. avoid problems if the package isn't available
-option(VENDORED_SDL "Use vendored SDL library" ${VENDORED_SDL_EXISTS})
-
-if(VENDORED_SDL)
-    message(STATUS "Using vendored SDL")
-    # TODO - try finding config files in vendored folder as well eventually
-    # list(APPEND CMAKE_PREFIX_PATH "vendored/SDL")
-    if(NOT VENDORED_SDL_EXISTS)
-        # git submodule update --init --recursive
-        message(FATAL_ERROR "Vendored SDL not found. Grab a copy of the source code and save it to vendored/SDL or fetch the submodule via Git (run 'git submodule update --init --recursive')")
-    endif()
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
-    add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
-else()
-    message(STATUS "Using packaged SDL")
-    if (WIN32)
-        list(APPEND CMAKE_PREFIX_PATH ${WIN_SDL3_CPATH})
-        # find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
-    endif()
-    find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared) # REQUIRED = outputs error; QUIET = does nothing. useful for downloading it dynamically
-endif()
-
 set_target_properties(${TARGET_MAIN} PROPERTIES
-    CXX_STANDARD 20
+    CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
     # OUTPUT_NAME "TPP"
@@ -74,7 +50,7 @@ target_compile_options(${TARGET_MAIN} PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
         -Wall -Wextra -Wpedantic -fdiagnostics-color=always
     >
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
 )
 
 if(WIN32)
@@ -87,7 +63,7 @@ if(WIN32)
 else()
 endif()
 
-target_link_libraries(${TARGET_MAIN} PRIVATE SDL3::SDL3)
+target_link_libraries(${TARGET_MAIN} PRIVATE SDL3_mixer::SDL3_mixer SDL3::SDL3)
 
 add_custom_command(TARGET ${TARGET_MAIN} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -95,3 +71,5 @@ add_custom_command(TARGET ${TARGET_MAIN} POST_BUILD
         $<TARGET_FILE_DIR:${TARGET_MAIN}>/assets
     COMMENT "Copying assets to output directory"
 )
+
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT "${EXECUTABLE_NAME}")
