@@ -6,6 +6,7 @@
 
 #include "engine/tengine.hpp"
 #include "engine/silly3D/silly_3D.hpp"
+#include "engine/sound/audio.hpp"
 #include "tetris/tetris_game.hpp"
 #include "tetris/tetris_menu.hpp"
 #include "tetris/tetris_input.hpp"
@@ -20,6 +21,8 @@ public:
     void raise_event(SDL_Event* event);
     SDL_AppResult update_and_draw();
     SDL_AppResult setup_app();
+
+    void load_sounds();
 
     ~AppState();
 private:
@@ -42,10 +45,18 @@ private:
 
     std::filesystem::path assets_root = std::filesystem::path("assets");
     std::filesystem::path fonts_root = assets_root / "fonts"; 
+    std::filesystem::path sounds_root = assets_root / "sounds"; 
     std::filesystem::path models_root = assets_root / "sillymodels";
     std::filesystem::path pieces_root = assets_root / "sillymodels" / "pieces";
 
     Tetris::Score::Leaderboard leaderboard;
+
+    TEngine::Sound::Mixer mixer;
+
+    std::vector<TEngine::Sound::Audio> sfx;
+    std::vector<TEngine::Sound::Audio> music;
+    std::vector<TEngine::Sound::Track> tracks_from_music;
+    std::vector<TEngine::Sound::Track> tracks_sfx;
     
     Experimental* __testing = nullptr;
 };

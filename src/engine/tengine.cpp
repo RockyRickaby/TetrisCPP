@@ -122,48 +122,49 @@ namespace TEngine {
                     return false;
                 }
                 switch (key.m_keystate) {
-                    case Key::KeyState::Up: {
+                    using enum Key::KeyState;
+                    case Up: {
                         if (is_down(key.scancode)) {
-                            key.m_keystate = Key::KeyState::Pressed;
+                            key.m_keystate = Pressed;
                             return true;
                         }
                     }; break;
-                    case Key::KeyState::Pressed: {
+                    case Pressed: {
                         if (is_down(key.scancode)) {
                             if (!key.may_repeat) {
                                 return false;
                             }
                             if (key.m_repeat_delay.get_countdown_time() <= 0) {
-                                key.m_keystate = Key::KeyState::Repeat;
+                                key.m_keystate = Repeat;
                                 return false;
                             }
-                            key.m_keystate = Key::KeyState::Wait;
+                            key.m_keystate = Wait;
                             key.m_repeat_delay.done(delta_time);
                             // if delay == 0, just jump to repeat state
                         } else {
-                            key.m_keystate = Key::KeyState::Up;
+                            key.m_keystate = Up;
                             key.m_repeat_delay.reset();
                             key.m_repeat_interval.reset();
                         }
                         return false;
                     }; break;
-                    case Key::KeyState::Wait: {
+                    case Wait: {
                         if (is_down(key.scancode)) {
                             if (!key.m_repeat_delay.done(delta_time)) {
                                 return false;
                             }
-                            key.m_keystate = Key::KeyState::Repeat;
+                            key.m_keystate = Repeat;
                             return true;
                         } else {
-                            key.m_keystate = Key::KeyState::Up;
+                            key.m_keystate = Up;
                             key.m_repeat_delay.reset();
                             key.m_repeat_interval.reset();
                             return false;
                         }
                     }; break;
-                    case Key::KeyState::Repeat: {
+                    case Repeat: {
                         if (is_up(key.scancode)) {
-                            key.m_keystate = Key::KeyState::Up;
+                            key.m_keystate = Up;
                             key.m_repeat_delay.reset();
                             key.m_repeat_interval.reset();
                             return false;
@@ -248,129 +249,129 @@ namespace TEngine {
             alpha != other.alpha;
     }
 
-    Vec2 operator+(const Vec2 lhs, const Vec2 rhs) {
-        float x1 = lhs.x + rhs.x;
-        float y1 = lhs.y + rhs.y;
-        return Vec2{x1, y1};
-    }
+    // Vec2 operator+(const Vec2 lhs, const Vec2 rhs) {
+    //     float x1 = lhs.x + rhs.x;
+    //     float y1 = lhs.y + rhs.y;
+    //     return Vec2{x1, y1};
+    // }
 
-    Vec2 operator*(const Vec2 vec, float scalar) {
-        float x1 = vec.x * scalar;
-        float y1 = vec.y * scalar;
-        return Vec2{x1, y1};
-    }
+    // Vec2 operator*(const Vec2 vec, float scalar) {
+    //     float x1 = vec.x * scalar;
+    //     float y1 = vec.y * scalar;
+    //     return Vec2{x1, y1};
+    // }
 
-    Vec2 operator*(float scalar, const Vec2 vec) {
-        return vec * scalar;
-    }
+    // Vec2 operator*(float scalar, const Vec2 vec) {
+    //     return vec * scalar;
+    // }
 
-    Vec2& Vec2::operator+=(const Vec2 other) {
-        x += other.x;
-        y += other.y;
-        return *this;
-    }
+    // Vec2& Vec2::operator+=(const Vec2 other) {
+    //     x += other.x;
+    //     y += other.y;
+    //     return *this;
+    // }
 
-    Vec2 operator-(const Vec2 lhs, const Vec2 rhs) {
-        float x1 = lhs.x - rhs.x;
-        float y1 = lhs.y - rhs.y;
-        return Vec2{x1, y1};
-    }
+    // Vec2 operator-(const Vec2 lhs, const Vec2 rhs) {
+    //     float x1 = lhs.x - rhs.x;
+    //     float y1 = lhs.y - rhs.y;
+    //     return Vec2{x1, y1};
+    // }
 
-    Vec2& Vec2::operator-=(const Vec2 other) {
-        x -= other.x;
-        y -= other.y;
-        return *this;
-    }
+    // Vec2& Vec2::operator-=(const Vec2 other) {
+    //     x -= other.x;
+    //     y -= other.y;
+    //     return *this;
+    // }
 
-    Vec2& Vec2::operator*=(float scalar) {
-        x *= scalar;
-        y *= scalar;
-        return *this;
-    }
+    // Vec2& Vec2::operator*=(float scalar) {
+    //     x *= scalar;
+    //     y *= scalar;
+    //     return *this;
+    // }
 
-    bool operator==(const Vec2 lhs, const Vec2 rhs) {
-        return lhs.x == rhs.x
-            && lhs.y == rhs.y;
-    }
+    // bool operator==(const Vec2 lhs, const Vec2 rhs) {
+    //     return lhs.x == rhs.x
+    //         && lhs.y == rhs.y;
+    // }
 
-    bool operator!=(const Vec2 lhs, const Vec2 rhs) {
-        // return lhs.x != rhs.x || lhs.y != rhs.y;
-        return !(lhs == rhs);
-    }
+    // bool operator!=(const Vec2 lhs, const Vec2 rhs) {
+    //     // return lhs.x != rhs.x || lhs.y != rhs.y;
+    //     return !(lhs == rhs);
+    // }
 
-    Vec3 operator+(const Vec3 lhs, const Vec3 rhs) {
-        float x1 = lhs.x + rhs.x;
-        float y1 = lhs.y + rhs.y;
-        float z1 = lhs.z + rhs.z;
-        return Vec3{x1, y1, z1};
-    }
+    // Vec3 operator+(const Vec3 lhs, const Vec3 rhs) {
+    //     float x1 = lhs.x + rhs.x;
+    //     float y1 = lhs.y + rhs.y;
+    //     float z1 = lhs.z + rhs.z;
+    //     return Vec3{x1, y1, z1};
+    // }
 
-    Vec3 operator*(const Vec3 vec, float scalar) {
-        float x1 = vec.x * scalar;
-        float y1 = vec.y * scalar;
-        float z1 = vec.z * scalar;
-        return Vec3{x1, y1, z1};
-    }
+    // Vec3 operator*(const Vec3 vec, float scalar) {
+    //     float x1 = vec.x * scalar;
+    //     float y1 = vec.y * scalar;
+    //     float z1 = vec.z * scalar;
+    //     return Vec3{x1, y1, z1};
+    // }
 
-    Vec3 operator*(float scalar, const Vec3 vec) {
-        return vec * scalar;
-    }
+    // Vec3 operator*(float scalar, const Vec3 vec) {
+    //     return vec * scalar;
+    // }
 
-    Vec3& Vec3::operator+=(const Vec3 other) {
-        x += other.x;
-        y += other.y;
-        z += other.z;
-        return *this;
-    }
+    // Vec3& Vec3::operator+=(const Vec3 other) {
+    //     x += other.x;
+    //     y += other.y;
+    //     z += other.z;
+    //     return *this;
+    // }
 
-    Vec3 operator-(const Vec3 lhs, const Vec3 rhs) {
-        float x1 = lhs.x - rhs.x;
-        float y1 = lhs.y - rhs.y;
-        float z1 = lhs.z - rhs.z;
-        return Vec3{x1, y1, z1};
-    }
+    // Vec3 operator-(const Vec3 lhs, const Vec3 rhs) {
+    //     float x1 = lhs.x - rhs.x;
+    //     float y1 = lhs.y - rhs.y;
+    //     float z1 = lhs.z - rhs.z;
+    //     return Vec3{x1, y1, z1};
+    // }
 
-    Vec3& Vec3::operator-=(const Vec3 other) {
-        x -= other.x;
-        y -= other.y;
-        z -= other.z;
-        return *this;
-    }
+    // Vec3& Vec3::operator-=(const Vec3 other) {
+    //     x -= other.x;
+    //     y -= other.y;
+    //     z -= other.z;
+    //     return *this;
+    // }
 
-    Vec3& Vec3::operator*=(float scalar) {
-        x *= scalar;
-        y *= scalar;
-        z *= scalar;
-        return *this;
-    }
+    // Vec3& Vec3::operator*=(float scalar) {
+    //     x *= scalar;
+    //     y *= scalar;
+    //     z *= scalar;
+    //     return *this;
+    // }
 
-    bool operator==(const Vec3 lhs, const Vec3 rhs) {
-        return lhs.x == rhs.x
-            && lhs.y == rhs.y
-            && lhs.z == rhs.z;
-    }
+    // bool operator==(const Vec3 lhs, const Vec3 rhs) {
+    //     return lhs.x == rhs.x
+    //         && lhs.y == rhs.y
+    //         && lhs.z == rhs.z;
+    // }
 
-    bool operator!=(const Vec3 lhs, const Vec3 rhs) {
-        return !(lhs == rhs) ;
-    }
+    // bool operator!=(const Vec3 lhs, const Vec3 rhs) {
+    //     return !(lhs == rhs) ;
+    // }
 
     std::ostream& operator<<(std::ostream& output, const Color& v) {
-        output << std::format("RGB: {} {} {} {}", v.r, v.g, v.b, v.a);
+        output << std::format("{:a}", v);
         return output;
     }
 
     std::ostream& operator<<(std::ostream& output, const ColorHSB& v) {
-        output << std::format("HSB: {} {} {} {}", v.hue, v.sat, v.bri, v.alpha);
+        output << std::format("{}", v);
         return output;
     }
 
     std::ostream& operator<<(std::ostream& output, const Vec2& v) {
-        output << std::format("({},{})", v.x, v.y);
+        output << std::format("{}", v);
         return output;
     }
 
     std::ostream& operator<<(std::ostream& output, const Vec3& v) {
-        output << std::format("({},{},{})", v.x, v.y, v.z);
+        output << std::format("{}", v);
         return output;
     }
 

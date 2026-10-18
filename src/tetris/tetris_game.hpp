@@ -1,7 +1,9 @@
 #pragma once
 
+#include <SDL3/SDL_oldnames.h>
 #include <SDL3/SDL_pixels.h>
 #include <memory>
+#include <span>
 #include <unordered_map>
 #include <array>
 #include <SDL3/SDL.h>
@@ -9,8 +11,9 @@
 #include "tetris_bags.hpp"
 #include "tetris_pieces.hpp"
 #include "../engine/tengine.hpp"
-#include "../engine/utils.hpp"
+#include "../engine/sound/audio.hpp"
 #include "../engine/text/fonts.hpp"
+#include "../engine/text/text_renderer.hpp"
 
 namespace Tetris {
     namespace __Internal {
@@ -26,8 +29,8 @@ namespace Tetris {
 
         // Currently, we do not concern ourselves about T-spins and other actions that affect the score
         template<typename PlayfieldRoutineCallback>
-        concept PlayfieldCallbackRequirements = requires(PlayfieldRoutineCallback cb, int rows_cleared) {
-            { cb(rows_cleared) } -> std::same_as<void>;
+        concept PlayfieldCallbackRequirements = requires(PlayfieldRoutineCallback cb, int rows_cleared, int highest_line) {
+            { cb(rows_cleared, highest_line) } -> std::same_as<void>;
         };
     };
 
@@ -41,7 +44,15 @@ namespace Tetris {
         static constexpr int BUFFER = 5;
 
         // constructor initializes the game. it will be ready to run
-        Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, TEngine::Text::BitmapFont* font, SDL_Texture* mino_texture);
+        Game(
+            SDL_Renderer* renderer,
+            int screen_width,
+            int screen_height,
+            float block_scale,
+            TEngine::Text::BitmapFont* font,
+            SDL_Texture* mino_texturem,
+            TEngine::Sound::Mixer* mixer
+        );
 
         template <Bag::TetriminoQueue Q>
         void set_piece_queue() { m_pieces_bag = std::make_unique<Q>(m_renderer, m_mino_texture, m_queue_offset_x, m_queue_offset_y, m_scale / 1.5f); }
@@ -82,22 +93,90 @@ namespace Tetris {
             double calculate_speed(void);
         };
 
+        struct ScoreSystemAdvanced {
+            enum class ScoreActions : unsigned int {
+                None = 0,
+                Single = 1u << 0,
+                Double = 1u << 1,
+                Triple = 1u << 2,
+                Tetris = 1u << 3,
+                MiniTSpin = 1u << 4,
+                TSpin = 1u << 5,
+                SoftDrop = 1u << 6,
+                HardDrop = 1u << 7,
+
+                MiniTSpinSingle = MiniTSpin | Single,
+
+                TSpinSingle = TSpin | Single,
+                TSpinDouble = TSpin | Double,
+                TSpinTriple = TSpin | Triple,
+            };
+
+            double speed = 1;
+            double __default_speed = 1;
+            int64_t score = 0;
+            int level = 1;
+            const int max_level = 15;
+            const int __lines_to_clear_per_level_multiplier = 10;
+            int __lines_cleared = 0;
+            int __goal = 10;
+
+            int __soft_lines = 0;
+            int __hard_lines = 0;
+            unsigned int __performed_actions;
+            bool __is_back_to_back = false;
+
+            bool is_5rot_spin = false;
+
+            void erase_spin(void);
+            void push_action(ScoreActions action);
+
+
+            void update(void);
+            void reset(void);
+            void set_level(int new_level);
+            double calculate_speed(void);
+        };
+
+        struct ScoreEventsTextManager {
+            struct EventText {
+                TEngine::Countdown visible_duration{1, false};
+                TEngine::Vec2 position{};
+                int text_idx = -1;
+                float speed = 20;
+
+                int time_to_speed();
+            };
+            std::array<TEngine::Text::BitmapText, 6> events_text{};
+            std::vector<EventText> ongoing_texts{};
+            Game* m_game_ptr;
+            bool init = false;
+
+            void reset(Game* game_ptr);
+            void enable_texts_for(ScoreSystemAdvanced::ScoreActions action, int height = -1);
+            void update(double delta_t);
+            void draw();
+        };
+
+        struct SoundSystem {
+            enum class AudioType {
+                RegularLineClear,
+                TetrisLineClear,
+                Rotation
+            };
+            // void play_sound(int audio_idx);
+        };
+
         struct PieceLockdownTimer {
             TEngine::Countdown timer = TEngine::Countdown{0.5, true};
             int moves = 15;
             float prev_y = -1;
             float piece_alpha = 1.0f;
 
-            void reset(void) {
-                timer.reset();
-                moves = 15;
-                prev_y = -1;
-                piece_alpha = 1.0f;
-            }
+            void reset(void);
         };
 
-        class PlayfieldUpdateRoutineAnimated {
-        public:
+        struct PlayfieldUpdateRoutineAnimated {
             TEngine::Countdown fps = {0, true}; // 0.375
             // TEngine::Countdown fps; // 0.375
 
@@ -107,6 +186,10 @@ namespace Tetris {
                 if (m_act == Action::Begin) {
                     reset();
                     get_ranges(game_ptr);
+                    for (const auto [x, y] : m_ranges_to_remove) {
+                        m_cleared += y - x;
+                    }
+                    game_ptr->m_scoreboard_events.enable_texts_for(static_cast<ScoreSystemAdvanced::ScoreActions>(1u << (m_cleared - 1)), m_ranges_to_remove.back().second);
                     fps.set_countdown_time(0.5/COLUMNS);
                     m_act = Action::Clearing;
                     return false;
@@ -130,13 +213,12 @@ namespace Tetris {
                     return false;
                 } else if (m_act == Action::Ending) {
                     m_act = Action::Begin;
+                    scoreboard_callback(m_cleared, m_ranges_to_remove.back().second);
                     pull_down(game_ptr);
-                    scoreboard_callback(m_cleared);
                     return true;
                 }
                 return true;
             }
-        private:
             enum class Action {
                 Begin,
                 Clearing,
@@ -174,56 +256,12 @@ namespace Tetris {
             TEngine::Vec2 black_screen_dimensions = {0, 0};
             TEngine::Vec2 black_screen_pos = {-100000, -100000};
 
-            TEngine::OneShotTimer initial_delay{0.5};
+            TEngine::OneShotTimer initial_delay{1.40};
             int row = 0;
             bool move_black_screen = false;
 
-            bool operator()(Game* game_ptr, double delta_t) {
-                if (!initial_delay.done(delta_t)) {
-                    return true;
-                }
-                if (move_black_screen) {
-                    if (black_screen_pos.y < -black_screen_dimensions.y) {
-                        black_screen_pos = {0, -black_screen_dimensions.y};
-                    }
-                    black_screen_pos.y += black_screen_dimensions.y * 2.0f * delta_t;
-                    if (black_screen_pos.y >= 0) {
-                        move_black_screen = false;
-                        initial_delay.time = 0.5;
-                        row = 0;
-                        return false;
-                    }
-                    return true;
-                } else if (animation_timer.done(delta_t)) { // this timer auto-resets
-                    TEngine::Color fill = {};
-                    // this routine auto-resets..
-                    if (row >= ROWS + BUFFER) {
-                        // animation_timer.reset();
-                        move_black_screen = true;
-                        return true;
-                    }
-                    if (row < ROWS - 2) {
-                        fill = TEngine::TUtils::color_from_hex("#808080");
-                    }
-                    std::fill(
-                        game_ptr->m_playfield_matrix.begin() + row * COLUMNS,
-                        game_ptr->m_playfield_matrix.begin() + COLUMNS + row * COLUMNS,
-                        fill);
-                    row++;
-                }
-                return true;
-            }
-
-            void draw(Game* game_ptr) {
-                SDL_FRect r {
-                    .x = black_screen_pos.x,
-                    .y = black_screen_pos.y,
-                    .w = black_screen_dimensions.x,
-                    .h = black_screen_dimensions.y
-                };
-                SDL_SetRenderDrawColor(game_ptr->m_renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-                SDL_RenderFillRect(game_ptr->m_renderer, &r);
-            }
+            bool operator()(Game* game_ptr, double delta_t);
+            void draw(Game* game_ptr);
         };
 
         SDL_Renderer* m_renderer;
@@ -246,7 +284,10 @@ namespace Tetris {
         std::vector<int> m_indices;
 
         // Consider injecting this one from elsewhere (in the constructor)
-        ScoreSystem m_scoreboard;
+        // ScoreSystem m_scoreboard;
+        TEngine::Sound::Mixer* m_mixer;
+        ScoreSystemAdvanced m_adv_scoreboard;
+        ScoreEventsTextManager m_scoreboard_events;
         PlayfieldUpdateRoutineAnimated m_update_playfield_routine;
         PlayfieldUpdateRoutineInstant m_update_playfield_instant;
         PlayfieldUpdateRoutineGameOver m_update_playfield_gameover;
@@ -272,7 +313,6 @@ namespace Tetris {
         bool m_hold_piece = false;
         bool m_hold_recently_swapped = false;
 
-        void reset_piece_lock_timer() { m_piece_lock.reset(); }
         bool try_move(bool &moved_down);
         bool try_rotate(void);        
         bool update_currentpiece(double delta_t, bool& placed);
@@ -287,8 +327,9 @@ namespace Tetris {
         bool check_collision(const Tetrimino::Piece &p);
         // returns false when a respawn is not needed (or simply when the piece wasn't held)
         bool perform_hold();
-        void perform_hard_drop(Tetrimino::Piece &p);
+        int perform_hard_drop(Tetrimino::Piece &p);
         bool perform_wallkick(Tetrimino::Piece &p);
+        void check_and_award_tspin(const Tetrimino::Piece &p, int rot_point);
         void draw_piece(const Tetrimino::Piece& p, bool fill = true, Uint8 alpha = SDL_ALPHA_OPAQUE);
         void draw_held_piece(const Tetrimino::Piece& p, float offset_x, float offset_y, float scale);
         void draw_playfield_blocks(void);

@@ -9,12 +9,10 @@ namespace TEngine {
         const std::string str_path = texture_path.string();
         const char* cpath = str_path.c_str();
 
-        SDL_Surface* img = load_surface_from_png(cpath);
+        SurfaceWrapper img = load_surface_from_png(cpath);
 
-        SDL_Texture* texture = texture_from_surface(renderer, img, cpath);
+        SDL_Texture* texture = texture_from_surface(renderer, img.get(), cpath);
         SDL_SetTextureScaleMode(texture, scale_mode);
-        SDL_DestroySurface(img);
-
         return TextureWrapper{texture};
     }
 
@@ -22,14 +20,12 @@ namespace TEngine {
         const std::string str_path = texture_path.string();
         const char* cpath = str_path.c_str();
 
-        SDL_Surface* img = load_surface_from_png(cpath);
+        SurfaceWrapper img = load_surface_from_png(cpath);
         std::uint32_t key = SDL_MapRGB(SDL_GetPixelFormatDetails(img->format), nullptr, color_key.r, color_key.g, color_key.b);
-        SDL_SetSurfaceColorKey(img, true, key);
+        SDL_SetSurfaceColorKey(img.get(), true, key);
 
-        SDL_Texture* texture = texture_from_surface(renderer, img, cpath);
+        SDL_Texture* texture = texture_from_surface(renderer, img.get(), cpath);
         SDL_SetTextureScaleMode(texture, scale_mode);
-        SDL_DestroySurface(img);
-
         return TextureWrapper(texture);
     }
 

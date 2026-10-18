@@ -10,17 +10,17 @@
 #include "text_renderer.hpp"
 #include "fonts.hpp"
 
-static inline std::tuple<TEngine::Vec2, TEngine::Vec2> __gen_points_for_line(int line_len, float x, float y, float scale, float angle) {
-    float rw = line_len * scale;
-    float rh = scale;
+static inline std::tuple<TEngine::Vec2, TEngine::Vec2> __gen_points_for_line(int line_len, float x, float y, float scale_width, float scale_height, float angle) {
+    float rw = line_len * scale_width;
+    float rh = scale_height;
     TEngine::Vec2 point1 = TEngine::Vec2{
         x,
         y + (rh / 2.0f)
-    } + TEngine::Vec2{(scale) / 2, 0};
+    } + TEngine::Vec2{(scale_width) / 2, 0};
     TEngine::Vec2 point2 = TEngine::Vec2{
         x + rw,
         y + (rh / 2.0f)
-    } - TEngine::Vec2{(scale) / 2, 0};
+    } - TEngine::Vec2{(scale_width) / 2, 0};
     TEngine::Vec2 center = point1 + (point2 - point1) * 0.5f;
 
     point1 -= center;
@@ -37,7 +37,7 @@ static inline std::tuple<TEngine::Vec2, TEngine::Vec2> __gen_points_for_line(int
 };
 
 template<typename Number, typename... Args> requires(std::is_arithmetic_v<Number>)
-static inline void __draw_number(TEngine::Text::BitmapFont* f, Number num, float x, float y, float scale, float angle = 0, Args&&... args) {
+static inline void __draw_number(TEngine::Text::BitmapFont* f, Number num, float x, float y, float scale_width, float scale_height, float angle = 0, Args&&... args) {
     std::array<char, 64> num_buf{};
     std::fill(std::begin(num_buf), std::end(num_buf), 0);
     std::to_chars_result res = std::to_chars(num_buf.data(), num_buf.data() + num_buf.size(), num, std::forward<Args>(args)...);
@@ -47,13 +47,14 @@ static inline void __draw_number(TEngine::Text::BitmapFont* f, Number num, float
 
     // res.ptr points to the end of the converted string
     std::size_t len = static_cast<std::size_t>(res.ptr - num_buf.data());
-    const auto actual_size = f->tile_size() * scale;
-    auto [start_pos, end_pos] = __gen_points_for_line(static_cast<int>(len), x, y, actual_size, angle);
+    const auto actual_width = f->tile_size() * scale_width;
+    const auto actual_height = f->tile_size() * scale_height;
+    auto [start_pos, end_pos] = __gen_points_for_line(static_cast<int>(len), x, y, actual_width, actual_height, angle);
     // for (std::size_t i = 0; i < len; i++) {
     //     f->draw_char(num_buf[i], x + static_cast<float>(i) * scale * f->tile_size(), y, scale);
     // }
     
-    TEngine::Vec2 mov = TEngine::Vec2{actual_size / 2.0f, actual_size / 2.0f};
+    TEngine::Vec2 mov = TEngine::Vec2{actual_width / 2.0f, actual_height / 2.0f};
     for (std::size_t i = 0; i < len; ++i) {
         // lerp!!
         float t = static_cast<float>(i) / static_cast<float>(len - 1);
@@ -62,7 +63,7 @@ static inline void __draw_number(TEngine::Text::BitmapFont* f, Number num, float
             num_buf[i],
             actual_pos.x,
             actual_pos.y,
-            scale, angle, TEngine::Text::TextFlipMode::None
+            scale_width, scale_height, angle, TEngine::Text::TextFlipMode::None
         );
     }
 }
@@ -75,9 +76,9 @@ namespace TEngine::Text {
             SDL_SetRenderTarget(f->get_renderer(), char_texture);
             SDL_SetRenderDrawColor(f->get_renderer(), 0, 0, 0, SDL_ALPHA_TRANSPARENT);
             SDL_RenderClear(f->get_renderer());
-            f->draw_char(ch, 0, 0, 1);
+            f->draw_char(ch, 0, 0, 1, 1);
             SDL_SetRenderTarget(f->get_renderer(), nullptr);
-            return BitmapText{f->get_renderer(), char_texture};
+            return BitmapText{f->get_renderer(), TextureWrapper{char_texture}, f->tile_size(), f->tile_size()};
         }
         
         // memory is now allocated only for the actual SDL_Texture.
@@ -85,24 +86,19 @@ namespace TEngine::Text {
         BitmapText make_bitmap_text_str(BitmapFont* f, std::string_view str) {
             int lines = 1;
             int width = -1;
-            // a little copy to more easily grab the length of the last (or only) line
-            std::string_view strview = str;
-            size_t idx = str.find("\n");
-            size_t prev = 0;
-            int len = -1;
-            while (idx != std::string::npos) {
-                lines += 1;
-                len = static_cast<int>(idx - prev);
+            using namespace std::string_view_literals;
+            for (const auto line : std::views::split(str, "\n"sv)) {
+                // const auto data = std::string_view{line.begin(), line.end()};
+                int len = static_cast<int>(line.size());
                 if (len > width) {
                     width = len;
                 }
-                prev = idx + 1;
-                strview = strview.substr(prev);
-                idx = str.find("\n", prev);
+                lines++;
             }
-            len = static_cast<int>(strview.length());
-            if (len > width) {
-                width = len;
+
+            // TDOO - warn
+            if (lines == -1 || width == -1) {
+                return {};
             }
 
             SDL_Texture* string_texture = SDL_CreateTexture(f->get_renderer(), SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width * f->tile_size(), lines * f->tile_size());
@@ -110,32 +106,31 @@ namespace TEngine::Text {
             SDL_SetRenderTarget(f->get_renderer(), string_texture);
             SDL_SetRenderDrawColor(f->get_renderer(), 0, 0, 0, SDL_ALPHA_TRANSPARENT);
             SDL_RenderClear(f->get_renderer());
-            const auto render_aux = [f, str](int start, int end, float y_off){
-                for (int i = start; i < end; ++i) {
-                    f->draw_char(str[i], static_cast<float>(i - start) * f->tile_size(), y_off * f->tile_size(), 1.0f);
-                }
-            };
+
             float y_off = 0;
-            std::size_t prev_i = 0;
-            for (size_t i = 0; i < str.length(); ++i) {
-                if (str[i] != '\n') {
-                    continue;
+            for (const auto line : std::views::split(str, "\n"sv)) {
+                // const auto data = std::string_view{line.begin(), line.end()};
+                int len = static_cast<int>(line.size());
+                for (int i = 0; i < len; ++i) {
+                    f->draw_char(
+                        line[i],
+                        static_cast<float>(i) * f->tile_size(),
+                        y_off * f->tile_size(),
+                        1.0f, 1.0f
+                    );
                 }
-                render_aux(static_cast<int>(prev_i), static_cast<int>(i), y_off);
                 y_off += 1;
-                prev_i = i + 1;
             }
-            render_aux(static_cast<int>(prev_i), static_cast<int>(str.length()), y_off);
             SDL_SetRenderTarget(f->get_renderer(), nullptr);
-            return BitmapText{f->get_renderer(), string_texture};
+            return BitmapText{f->get_renderer(), TextureWrapper{string_texture}, width * f->tile_size(), lines * f->tile_size()};
         }
 
         BitmapText make_bitmap_text_num(BitmapFont* f, std::int64_t num) {
-            char num_buf[32]{};
-            std::to_chars_result res = std::to_chars(num_buf, num_buf + 20, num, 10);
-            num_buf[31] = '\0';
+            std::array<char, 64> num_buf{};
+            std::fill(std::begin(num_buf), std::end(num_buf), 0);
+            std::to_chars_result res = std::to_chars(num_buf.data(), num_buf.data() + 20, num, 10);
             // res.ptr points to the end of the converted string
-            std::size_t len = static_cast<std::size_t>(res.ptr - num_buf);
+            std::size_t len = static_cast<std::size_t>(res.ptr - num_buf.data());
 
             SDL_Texture* num_texture = SDL_CreateTexture(f->get_renderer(), SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, static_cast<int>(len) * f->tile_size(), f->tile_size());
             SDL_SetTextureScaleMode(num_texture, SDL_SCALEMODE_NEAREST);
@@ -144,11 +139,11 @@ namespace TEngine::Text {
             SDL_RenderClear(f->get_renderer());
 
             for (std::size_t i = 0; i < len; i++) {
-                f->draw_char(num_buf[i], static_cast<float>(i) * f->tile_size(), 0, 1);
+                f->draw_char(num_buf[i], static_cast<float>(i) * f->tile_size(), 0, 1, 1);
             }
 
             SDL_SetRenderTarget(f->get_renderer(), nullptr);
-            return {f->get_renderer(), num_texture};
+            return {f->get_renderer(), TextureWrapper{num_texture}, static_cast<int>(len) * f->tile_size(), f->tile_size()};
         }
 
         Color set_text_color_mod(BitmapFont* f, Color color) {
@@ -158,15 +153,23 @@ namespace TEngine::Text {
             SDL_SetTextureColorMod(texture, color.r, color.g, color.b);
             return mod;
         }
+
+        std::uint8_t set_text_alpha_mod(BitmapFont* f, std::uint8_t alpha) {
+            auto* texture = f->get_texture_atlas().get_texture().get();
+            std::uint8_t mod;
+            SDL_GetTextureAlphaMod(texture, &mod);
+            SDL_SetTextureAlphaMod(texture, alpha);
+            return mod;
+        }
         
         // this one might be better than make_bitmap_text_ch in terms of resource usage
         // since it just draws straight to the screen
-        void draw_char(BitmapFont* f, char ch, float x, float y, float scale, float angle, TextFlipMode flipmode) {
-            f->draw_char(ch, x, y, scale, angle, flipmode);
+        void draw_char(BitmapFont* f, char ch, float x, float y, float scale_width, float scale_height, float angle, TextFlipMode flipmode) {
+            f->draw_char(ch, x, y, scale_width, scale_height, angle, flipmode);
         }
         
         // ok
-        void draw_string(BitmapFont* f, std::string_view str, float x, float y, float scale, float angle, TextFlipMode flipmode) {
+        void draw_string(BitmapFont* f, std::string_view str, float x, float y, float scale_width, float scale_height, float angle, TextFlipMode flipmode) {
             // 1 - view-based solution (C++20)
             using namespace std::string_view_literals;
             // float y_off = 0;
@@ -186,16 +189,18 @@ namespace TEngine::Text {
 
             int longest_line = -1;
             int total_lines = 0;
+            // float scale = scale_width > scale_height ? scale_height : scale_width;
             for (const auto line : std::views::split(str, "\n"sv)) {
                 longest_line = std::max(longest_line, static_cast<int>(line.size()));
                 total_lines += 1;
             }
-            const auto actual_size = f->tile_size() * scale;
-            auto [start_pos, end_pos] = __gen_points_for_line(longest_line, x, y + ((total_lines - 1)/2.0f) * actual_size, actual_size, angle);
+            const auto actual_width = f->tile_size() * scale_width;
+            const auto actual_height = f->tile_size() * scale_height;
+            auto [start_pos, end_pos] = __gen_points_for_line(longest_line, x, y + ((total_lines - 1)/2.0f) * actual_height, actual_width, actual_height, angle);
 
             // float line_off = -(static_cast<float>(total_lines) / 2.0f - 0.5f);
             const auto draw_full = [=](float line_offset, float line_inc){
-                Vec2 mov = Vec2{actual_size / 2.0f, actual_size / 2.0f};
+                Vec2 mov = Vec2{actual_width / 2.0f, actual_height / 2.0f};
                 for (const auto line : std::views::split(str, "\n"sv)) {
                     int len = static_cast<int>(line.size());
                     // for (int i = 0; i < len; ++i) {
@@ -217,13 +222,13 @@ namespace TEngine::Text {
                         int i = starting_i;
                         for (auto it = line.begin(); it != line.end(); ++it) {
                             float t = static_cast<float>(i) / static_cast<float>(longest_line - 1);
-                            Vec2 up = (Vec2{0, 1} * (actual_size * line_offset)).rotate(angle);
+                            Vec2 up = (Vec2{0, 1} * (actual_height * line_offset)).rotate(angle);
                             Vec2 actual_pos = lerpv2(start_pos, end_pos, t) + up - mov;
                             f->draw_char(
                                 *it,
                                 actual_pos.x,
                                 actual_pos.y,
-                                scale, angle, flipmode
+                                scale_width, scale_height, angle, flipmode
                             );
                             i++;
                         }
@@ -262,8 +267,9 @@ namespace TEngine::Text {
             // }
         }
 
-        void draw_string_line(BitmapFont* f, std::string_view line, float x, float y, float scale, float angle, TextFlipMode flipmode) {
-            const auto actual_size = f->tile_size() * scale;
+        void draw_string_line(BitmapFont* f, std::string_view line, float x, float y, float scale_width, float scale_height, float angle, TextFlipMode flipmode) {
+            const auto actual_width = f->tile_size() * scale_width;
+            const auto actual_height = f->tile_size() * scale_height;
             // version that works fine, with only per-character rotations (keep it here just in case)
             // int len = static_cast<int>(line.length());
             // for (int i = 0; i < len; ++i) {
@@ -275,9 +281,9 @@ namespace TEngine::Text {
             //     );
             // }
             int len = static_cast<int>(line.length());
-            auto [start_pos, end_pos] = __gen_points_for_line(len, x, y, actual_size, angle);
+            auto [start_pos, end_pos] = __gen_points_for_line(len, x, y, actual_width, actual_height, angle);
             
-            Vec2 mov = Vec2{actual_size / 2.0f, actual_size / 2.0f};
+            Vec2 mov = Vec2{actual_width / 2.0f, actual_height / 2.0f};
             // for (int i = 0; i < len; ++i) {
             //     // lerp!!
             //     float t = static_cast<float>(i) / static_cast<float>(len - 1);
@@ -294,7 +300,7 @@ namespace TEngine::Text {
             //     );
             // }
 
-            const auto draw = [f, scale, angle, flipmode, start_pos, end_pos, mov, len](auto&& begin, auto&& end){
+            const auto draw = [f, scale_width, scale_height, angle, flipmode, start_pos, end_pos, mov, len](auto&& begin, auto&& end){
                 int i = 0;
                 for (auto it = begin; it != end; ++it) {
                     // lerp!!
@@ -305,7 +311,7 @@ namespace TEngine::Text {
                         *it,
                         actual_pos.x,
                         actual_pos.y,
-                        scale, angle, flipmode
+                        scale_width, scale_height, angle, flipmode
                     );
                     i++;
                 }
@@ -320,16 +326,16 @@ namespace TEngine::Text {
         }
 
         // m e s s y y y y y y y !!!!!
-        void draw_int64(BitmapFont* f, std::int64_t num, float x, float y, float scale, float angle) {
-            __draw_number(f, num, x, y, scale, angle);
+        void draw_int64(BitmapFont* f, std::int64_t num, float x, float y, float scale_width, float scale_height, float angle) {
+            __draw_number(f, num, x, y, scale_width, scale_height, angle);
         }
 
-        void draw_float(BitmapFont* f, float num, float x, float y, float scale, float angle) {
-            __draw_number(f, num, x, y, scale, angle, std::chars_format::fixed);
+        void draw_float(BitmapFont* f, float num, float x, float y, float scale_width, float scale_height, float angle) {
+            __draw_number(f, num, x, y, scale_width, scale_height, angle, std::chars_format::fixed);
         }
 
-        void draw_double(BitmapFont* f, double num, float x, float y, float scale, float angle) {
-            __draw_number(f, num, x, y, scale, angle, std::chars_format::fixed);
+        void draw_double(BitmapFont* f, double num, float x, float y, float scale_width, float scale_height, float angle) {
+            __draw_number(f, num, x, y, scale_width, scale_height, angle, std::chars_format::fixed);
         }
     }
 }

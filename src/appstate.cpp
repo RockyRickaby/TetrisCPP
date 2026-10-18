@@ -1,13 +1,24 @@
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_properties.h>
+#include <SDL3/SDL_rect.h>
 #include <filesystem>
+#include <cassert>
 #include <array>
 #include <memory>
+#include <print>
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
 
 #include "appstate.hpp"
 #include "engine/events.hpp"
+#include "engine/shapes/bezier.hpp"
+#include "engine/shapes/hermite.hpp"
+#include "engine/shapes/splines.hpp"
+#include "engine/sound/audio.hpp"
+#include "engine/shapes/shapes.hpp"
 #include "engine/tengine.hpp"
+#include "engine/utils.hpp"
 #include "engine/text/fonts.hpp"
+#include "engine/text/text_renderer.hpp"
 #include "engine/texture.hpp"
 #include "engine/silly3D/silly_3D.hpp"
 #include "tetris/tetris_piece3d.hpp"
@@ -21,19 +32,32 @@ struct Experimental {
     TEngine::Text::BitmapFont* fnt;
 };
 
+class Testing : public TEngine::Events::IEventListener {
+public:
+    bool OnKeyPressed(TEngine::Events::KeyPressedEvent&) override { std::println("it worked"); return false; }
+    bool OnKeyReleased(TEngine::Events::KeyReleasedEvent&) override { std::println("it worked"); return false; }
+    bool OnKeyRepeat(TEngine::Events::KeyRepeatEvent&) override { std::println("it worked"); return false; }
+    bool OnApplicationExit(TEngine::Events::ApplicationExitEvent&) override { std::println("it worked"); return false; }
+};
+
 namespace fs = std::filesystem;
 using TetrisBag = Tetris::Bag::Standard;
+
+TEngine::Text::BitmapText test;
+
+// static constexpr TEngine::Splines::Bezier2D::CubicBezier curve{{0,0}, {0.42 * 960,0.0 * 720}, {0.58 * 960,1.0 * 720}, {1 * 960,1 * 720}};
+// static float t_bz = 0;
 
 SDL_AppResult AppState::setup_app() {
     using namespace TEngine;
     metadata = {
-        "Example Renderer Clear",
-        "1.0",
-        "com.example.renderer-clear"
+        "Tetris C++",
+        "0.0",
+        "com.mauro.tetriscpp"
     };
 
     window = {
-        .window_name = "main_window",
+        .window_name = "Tetris C++",
         .width = 960,
         .height = 720,
         .window_flags = SDL_WINDOW_RESIZABLE,
@@ -49,9 +73,6 @@ SDL_AppResult AppState::setup_app() {
 
     __testing = new Experimental();
     silly_assets3d.set_renderer(window.renderer);
-    // TODO - specialize formatters for the types in TEngine
-    // std::cout << std::format("Color: {}", TEngine::Color{0,0,0}) << std::endl;
-    // static_assert(std::is_default_constructible_v<TEngine::Color>);
     using namespace Tetris::Tetrimino;
     const auto v = std::array{
         Type::I,
@@ -76,11 +97,10 @@ SDL_AppResult AppState::setup_app() {
     }
 
     fs::path joust_font_path = fonts_root / "JoustFont";
-    // spratlas = TEngine::Sprites::SpriteAtlas(joust_font_path, 8, 8, window.renderer, SDL_SCALEMODE_NEAREST);
-    // font = std::make_unique<Text::JoustFont>(joust_font_path, 8, window.renderer, TEngine::TUtils::color_from_uint32(0));
     font = Text::BitmapFont::load_font(joust_font_path, 8, window.renderer, SDL_SCALEMODE_NEAREST, {0,0,0,255});
     // tile size for the game should be about 40 x 24
     mino_texture = TEngine::load_texture(assets_root / "mino.png", SDL_SCALEMODE_LINEAR, window.renderer);
+    load_sounds();
 
     tetris_keys.setup_keys(Tetris::Keybinds::Settings::Default);
     game = std::make_unique<Tetris::Game>(
@@ -88,7 +108,8 @@ SDL_AppResult AppState::setup_app() {
         window.logical_width, window.logical_height,
         static_cast<float>(window.logical_width) / 32.0f,
         &font,
-        mino_texture.get()
+        mino_texture.get(),
+        &mixer
     );
     menu = std::make_unique<Tetris::MainMenu>(&font, &tetris_keys, window.renderer, pieces3dwire, pieces3dfill);
     // TODO - implement these main states and set them up properly
@@ -101,42 +122,118 @@ SDL_AppResult AppState::setup_app() {
         leaderboard,
         pieces3dwire,
         pieces3dfill,
-        SDL_GetWindowID(window.window)
+        SDL_GetWindowID(window.window),
+        tracks_from_music
     );
 
     // game_sm->switch_to(Tetris::States::STATE_GAMEOVER);
-    
-    // TODO - make this constructor explicit
-    // __testing->sillymodel = &silly_assets3d.load_model(
-    //     models_root / "pieces" / "Tpiece.obj"
-    // );
 
-    // // instance = {"penger", sillymodel, {0, 0, 3}, {}, TEngine::TUtils::color_from_hex("#FFDE00"), window.renderer, width, height};
-    // __testing->instance = silly_assets3d.instance_from(__testing->sillymodel->name, window.width, window.height);
-    // __testing->instance.position += Vec3{0, 0, 4};
-    // // __testing->instance.rotation = { -SDL_PI_F/2, 0,0 };
-    // __testing->instance.color = TEngine::TUtils::color_from_hex("#B802FD");
-    // __testing->instance.cull_wireframe = false;
-    // __testing->instance.fill = false;
-    // __testing->instance.jitter = false;
-
-    // __testing->instance2 = __testing->instance;
-    // __testing->instance2.position = Vec3{-2, 0, 4};
     __testing->fnt = &font;
+    test = Text::BitmapFontRenderer::make_bitmap_text_str(&font, "tetris\n   100");
     return SDL_APP_CONTINUE;
 }
 
 AppState::~AppState() {
     // SDL_StopTextInput(window.window);
+    tracks_from_music.clear();
+    tracks_sfx.clear();
+    music.clear();
+    sfx.clear();
+    mixer.reset(); // needed to prevent segfault when calling MIX_DestroyMixer AFTER MIX_Quit;
+
+    MIX_Quit();
     TEngine::end_window(window);
     delete __testing;
 }
 
+void AppState::load_sounds() {
+    using namespace TEngine;
+    constexpr std::array sfx_files = {
+        "piece_lock.ogg",
+        "line_clear1.ogg",
+        "line_clear2.ogg",
+        "line_clear3.ogg",
+        "gameover.ogg",
+        "4line_clear.ogg",
+    };
+    // TROIKA = 3s 280ms
+    // LOGINSKA = 30s 73ms
+    constexpr std::array music_files = {
+        std::make_pair("loginska.ogg", "loginska"),
+        std::make_pair("troika.ogg", "troika"),
+        std::make_pair("kalinka.ogg", "kalinka"),
+        std::make_pair("3.ogg", "3"),
+    };
+    
+    MIX_Init();
+    SDL_AudioSpec spec = {
+        .format = SDL_AUDIO_S16,
+        .channels = 2,
+        .freq = 48000
+    };
+    mixer = Sound::Mixer{MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec)};
 
-static double lim = 1.0/(20);
-// static double lim = 0;
-static double acc = 0;
-static double ang = 0;
+    for (const std::string_view filename : sfx_files) {
+        if (!fs::exists(sounds_root / filename)) {
+            std::println(stderr, "sfx file does not exist: {}", filename);
+            continue;
+        }
+        auto ptr_audio = MIX_LoadAudio(mixer.get(), (sounds_root / filename).string().c_str(), true);
+        if (!ptr_audio) {
+            continue;
+        }
+        sfx.emplace_back(ptr_audio);
+
+        auto ptr_track = MIX_CreateTrack(mixer.get());
+        if (!ptr_track) {
+            music.pop_back();
+            continue;
+        }
+
+        MIX_SetTrackAudio(ptr_track, ptr_audio);
+        MIX_TagTrack(ptr_track, "game_sounds");
+        MIX_TagTrack(ptr_track, std::string{filename.substr(0, filename.find_last_of('.'))}.c_str());
+
+        tracks_sfx.emplace_back(ptr_track, mixer);
+    }
+
+    for (const auto& [filename, song_name] : music_files) {
+        if (!fs::exists(sounds_root / filename)) {
+            std::println(stderr, "music file does not exist: {}", filename);
+            continue;
+        }
+        auto ptr_audio = MIX_LoadAudio(mixer.get(), (sounds_root / filename).string().c_str(), false);
+        if (!ptr_audio) {
+            continue;
+        }
+        music.emplace_back(ptr_audio);
+        auto ptr_track = MIX_CreateTrack(mixer.get());
+        if (!ptr_track) {
+            music.pop_back();
+            continue;
+        }
+
+        MIX_SetTrackAudio(ptr_track, ptr_audio);
+        MIX_TagTrack(ptr_track, song_name);
+        MIX_TagTrack(ptr_track, "game_sounds");
+        Sound::Track song_track{ptr_track, mixer};
+
+        std::string_view name_strview{song_name};
+        song_track.m_properties = SDL_CreateProperties();
+
+        SDL_SetNumberProperty(song_track.m_properties, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
+        if (name_strview == "loginska") {
+            SDL_SetNumberProperty(song_track.m_properties, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 30073);
+        } else if (name_strview == "troika") {
+            SDL_SetNumberProperty(song_track.m_properties, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 3279);
+        }
+        tracks_from_music.emplace_back(std::move(song_track));
+    }
+    // MIX_SetTagGain(mixer.get(), "game_sounds", 0.25f);
+    MIX_SetMixerGain(mixer.get(), 0.25f);
+}
+
+
 SDL_AppResult AppState::update_and_draw() {
     using namespace TEngine;
     double delta = time.delta_time();
@@ -150,31 +247,19 @@ SDL_AppResult AppState::update_and_draw() {
     SDL_RenderClear(window.renderer);
     game_sm->draw();
 
-    // for (auto& m : pieces3dfill) {
-    //     if (m.model->name != "TpieceTri") continue;
-    //     m.rotate_y((1.0f / 2) / 2 * delta);
-    //     // m.draw_geometry({}, 0.5f);
-    //     m.draw_wireframe();
-    //     // break;
+    // auto v = TEngine::Splines::spline2d(curve, t_bz);
+    // // v.y *= 720;
+    // // v.x *= 960;
+    // // v.y = 720 - v.y;
+    // t_bz += 0.25 * delta;
+    // if (t_bz >= 1) {
+    //     t_bz = 0;
     // }
+    // SDL_FRect r{v.x - 7.5f, v.y - 7.5f, 15, 15};
+    // SDL_RenderFillRect(window.renderer, &r);
 
-    acc += delta;
-    // Text::BitmapFontRenderer::draw_string_line(&__testing->fnt, "tetris", 0, 0, 10, ang, Text::TextFlipMode::None);
-    // Text::BitmapFontRenderer::draw_string_line(&__testing->fnt, "hold", 0, 0, static_cast<float>(window.width) / 32.0f / 11.5f, 0, Text::TextFlipMode::None);
-    // Color old = Text::BitmapFontRenderer::set_text_color_mod(&__testing->fnt, TEngine::TUtils::color_from_hex("#FF0000"));
-    // Text::BitmapFontRenderer::draw_int64(&__testing->fnt, 1234, 0, 0, 10, 0);
-    // Text::BitmapFontRenderer::set_text_color_mod(&__testing->fnt, old);
-    ang += ((SDL_PI_F / 2.0f) * delta);
-    if (acc >= lim) {
-        __testing->instance.rotate_y((SDL_PI_F / 2.0f) * acc);
-        acc = 0;
-    }
-    __testing->instance2.rotate_y((SDL_PI_F / 2.0f) * delta);
-
-    // __testing->instance.draw_instance({0,100,-100}, .5f);
-    // __testing->instance2.draw_instance({0,100,-100}, .5f);
-
-    /* put the newly-cleared rendering on the screen. */
+    Splines::spline2d<Splines::Bezier2D::QuadraticBezier>({}, 1);
+    // Shape::draw_spline2d(window.renderer, curve, 16);
     SDL_RenderPresent(window.renderer);
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
@@ -182,8 +267,10 @@ SDL_AppResult AppState::update_and_draw() {
 void AppState::raise_event(SDL_Event* event) {
     using namespace TEngine::Events;
     Tetris::States::TetrisStateMachine& recv = *(game_sm.get());
-
     switch (event->type) {
+        case SDL_EVENT_QUIT: {
+            forward_event<ApplicationExitEvent>(recv);
+        } break;
         case SDL_EVENT_TEXT_INPUT: {
             forward_event<TextInputEvent>(recv, event->text.text);
         } break;

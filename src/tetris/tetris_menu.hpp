@@ -8,7 +8,7 @@
 #include "tetris_piece3d.hpp"
 
 namespace Tetris {
-    class MainMenu : public TEngine::Events::EventListener {
+    class MainMenu {
     public:
         MainMenu(
             TEngine::Text::BitmapFont* font,
@@ -18,7 +18,7 @@ namespace Tetris {
             std::span<Tetris::Piece3D> m_blocks_filled
         );
         bool update(double delta_t);
-        void event(TEngine::Events::IEvent& event) override;
+        void event(TEngine::Events::IEvent& event);
         void draw(void);
         void reset(void);
     private:
@@ -26,8 +26,8 @@ namespace Tetris {
         bool OnKeyReleased(TEngine::Events::KeyReleasedEvent& event);
         bool OnKeyRepeat(TEngine::Events::KeyRepeatEvent& event);
 
-        bool OnMousePressed(TEngine::Events::IEvent& event);
-        bool OnMouseReleased(TEngine::Events::IEvent& event);
+        bool OnMousePressed(TEngine::Events::MousePressedEvent& event);
+        bool OnMouseReleased(TEngine::Events::MouseReleasedEvent& event);
         // bool OnMouseDown(TEngine::Events::IEvent& event);
 
         SDL_Renderer* m_renderer;

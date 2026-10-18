@@ -1,8 +1,7 @@
-#include <SDL3/SDL_keyboard.h>
-#include <SDL3/SDL_pixels.h>
-#include <SDL3/SDL_render.h>
-#include <SDL3/SDL_scancode.h>
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #include <array>
+#include <print>
 
 #include "tetris_game_sm.hpp"
 #include "../../engine/text/text_renderer.hpp"
@@ -114,6 +113,11 @@ namespace Tetris::States {
 
     void RunGameState::enter() {
         reset();
+        // start playing track on state->enter and pause it immediately
+        // actually start playing it only after the countown... at least for now
+        m_curr_track = &m_music[TEngine::random_int(0, m_music.size() - 3)];
+        MIX_PlayTrack(m_curr_track->get(), m_curr_track->m_properties);
+        MIX_PauseTrack(m_curr_track->get());
     }
 
     void RunGameState::update(double delta_t) {
@@ -122,9 +126,16 @@ namespace Tetris::States {
         }
         if (m_pause) {
             m_pause_countdown.set_countdown_time(3);
+            if (MIX_TrackPlaying(m_curr_track->get())) {
+                MIX_PauseTrack(m_curr_track->get());
+            }
             return;
         } else if (!m_pause_countdown.done(delta_t)) {
             return;
+        }
+
+        if (MIX_TrackPaused(m_curr_track->get())) {
+            MIX_ResumeTrack(m_curr_track->get());
         }
 
         m_go_count.done(delta_t);
@@ -158,7 +169,11 @@ namespace Tetris::States {
         m_game_ptr->rotate(rot);
 
         if (!m_game_ptr->update(delta_t)) {
-            m_parent_sm->switch_to(STATE_GAMEOVER);
+            MIX_StopTrack(m_curr_track->get(), 0);
+            m_over_c += 1;
+            if (m_over_c >= 2) {
+                m_parent_sm->switch_to(STATE_GAMEOVER);
+            }
         }
     }
 
@@ -172,7 +187,7 @@ namespace Tetris::States {
         m_game_ptr->draw();
         float scale = 5;
         if (m_begin_countdown.get_time_left() > 0) {
-            TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_begin_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale);
+            TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_begin_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale, scale);
         } else if (!m_go_count.done(0)) {
             // scale = 5;
             TEngine::Text::BitmapFontRenderer::draw_string_line(
@@ -180,7 +195,7 @@ namespace Tetris::States {
                 __STR_GO,
                 (960 - __STR_GO.size() * m_font->tile_size() * scale) / 2.0f,
                 (720 - m_font->tile_size() * scale) / 2.0f,
-                scale
+                scale, scale
             );
         }
 
@@ -191,11 +206,11 @@ namespace Tetris::States {
                 __STR_PAUSE,
                 (960 - __STR_PAUSE.size() * m_font->tile_size() * scale) / 2.0f,
                 (720 - m_font->tile_size() * scale) / 2.0f,
-                scale
+                scale, scale
             );
         }
         if (m_pause_countdown.get_time_left() > 0 && !m_pause) {
-            TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_pause_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale);
+            TEngine::Text::BitmapFontRenderer::draw_int64(m_font, static_cast<int>(m_pause_countdown.get_time_left()) + 1, (960 - scale * m_font->tile_size()) / 2.0f, (720 - scale * m_font->tile_size()) / 2.0f, scale, scale);
         }
     }
 
@@ -204,12 +219,14 @@ namespace Tetris::States {
         m_begin_countdown.reset();
         m_pause_countdown.set_countdown_time(0);
         m_pause = false;
+        m_over_c = 0;
         
         m_run_state = State::Begin;
         m_go_count.time = 1;
     }
 
     void RunGameState::exit() {
+        MIX_StopTag(m_music.back().m_mixer->get(), "game_sounds", 0);
     }
 
     bool RunGameState::OnKeyPressed(TEngine::Events::KeyPressedEvent& event) {
@@ -242,22 +259,26 @@ namespace Tetris::States {
     void GameOverState::enter(void) {
         m_leaderboard.load_scores(m_lb_storage);
         m_has_highscore = m_leaderboard.is_new_highscore(m_game_ptr->get_score());
+        m_curr_track = m_has_highscore ? &m_tracks[2] : &m_tracks[3];
         reset();
         // TODO - enable input from here OR after the leaderboard is shown
         // SDL_StartTextInput(SDL_GetWindowFromID(m_window_id));
     }
     void GameOverState::update(double delta_t) {
-        if (m_gameover_timer.done(delta_t)) {
-            // m_sm_ptr->switch_to(STATE_MAIN_MENU);
-        }
         if (!m_highscore_delay.done(delta_t)) {
             return;
         }
 
+        if (!MIX_TrackPlaying(m_curr_track->get())) {
+            MIX_PlayTrack(m_curr_track->get(), m_curr_track->m_properties);
+        }
         if (m_has_highscore) {
             if (!m_leaderboard_transition_delay.done(delta_t)) {
                 return;
             }
+            // NOTE - since there is no proper text input handling, we check here to see
+            // if the player can still type any more characters. When false, this allows any button press
+            // to skip the leaderboard
             m_typing_name = m_player_name.length() < Score::ScoreEntry::player_name_max_length;
         } else {
             m_leaderboard_transition_delay.time = 0;
@@ -296,8 +317,6 @@ namespace Tetris::States {
         ed.dispatch<KeyPressedEvent>([this](KeyPressedEvent& key) -> bool {
             if (m_typing_name) {
                 handle_scancode(key.scancode);
-            } else if (!m_gameover_timer.done(0)) {
-                return false;
             } else if (!m_highscore_delay.done(0)) {
                 m_highscore_delay.time = 0;
             } else if (!m_leaderboard_transition_delay.done(0)) {
@@ -319,11 +338,11 @@ namespace Tetris::States {
     void GameOverState::draw(void) {
         using namespace TEngine::Text;
         if (m_highscore_delay.time > 0 && m_leaderboard_transition_delay.time > 0) {
-            BitmapFontRenderer::draw_string_line(m_font, __STR_GAMEOVER, m_gameover_text_pos.x, m_gameover_text_pos.y, 5);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_GAMEOVER, m_gameover_text_pos.x, m_gameover_text_pos.y, 5, 5);
         }
 
         if (m_has_highscore && m_highscore_delay.time == 0 && m_leaderboard_transition_delay.time > 0) {
-            BitmapFontRenderer::draw_string_line(m_font, __STR_HIGHSCORE, m_newscore_text_pos.x, m_newscore_text_pos.y, 5);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_HIGHSCORE, m_newscore_text_pos.x, m_newscore_text_pos.y, 5, 5);
         }
         
         float text_scale = 2.75f;
@@ -340,25 +359,25 @@ namespace Tetris::States {
             m_block->draw_wireframe();
             float y_off = 0;
             int count = m_has_highscore ? 1 : 0;
-            BitmapFontRenderer::draw_string_line(m_font, __STR_RANK, m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale);
-            BitmapFontRenderer::draw_string_line(m_font, __STR_PLAYER, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale);
-            BitmapFontRenderer::draw_string_line(m_font, __STR_SCORE, m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_RANK, m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale, text_scale);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_PLAYER, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale, text_scale);
+            BitmapFontRenderer::draw_string_line(m_font, __STR_SCORE, m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y - 2 * text_scale * 12, text_scale, text_scale);
             size_t total_ranks = m_leaderboard.size();
             if (m_has_highscore && total_ranks < 10) {
                 total_ranks += 1;
             }
             for (size_t i = 0; i < total_ranks; i++) {
-                BitmapFontRenderer::draw_int64(m_font, i + 1, m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
-                BitmapFontRenderer::draw_char(m_font, '.', m_leaderboard_offset.x - ((i + 1) >= 10 ? ranks_offset - 2 : ranks_offset - 1) * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
-                // BitmapFontRenderer::draw_string_line(m_font, __RANKS_ORDINAL.at(i), m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                BitmapFontRenderer::draw_int64(m_font, i + 1, m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale, text_scale);
+                BitmapFontRenderer::draw_char(m_font, '.', m_leaderboard_offset.x - ((i + 1) >= 10 ? ranks_offset - 2 : ranks_offset - 1) * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale, text_scale);
+                // BitmapFontRenderer::draw_string_line(m_font, __RANKS_ORDINAL.at(i), m_leaderboard_offset.x - ranks_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale, text_scale);
                 y_off += text_scale * 12;
             }
             y_off = 0;
             const auto draws = [this, text_scale, players_offset, scores_offset, &y_off, &count](auto&& begin, auto&& end){
                 for (auto it = begin; it != end && count < 10; ++it) {
                     const auto& [score, name] = *it;
-                    BitmapFontRenderer::draw_string_line(m_font, name, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
-                    BitmapFontRenderer::draw_int64(m_font, score, m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                    BitmapFontRenderer::draw_string_line(m_font, name, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale, text_scale);
+                    BitmapFontRenderer::draw_int64(m_font, score, m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale, text_scale);
                 
                     y_off += text_scale * 12;
                     count++;
@@ -368,7 +387,8 @@ namespace Tetris::States {
                 __STR_LEADERBOARD,
                 (960 - ((__STR_LEADERBOARD.size()) * m_font->tile_size() * text_scale)) / 2.0f,
                 m_leaderboard_offset.y - 4.5f  * text_scale * 12,
-                text_scale);
+                text_scale, text_scale
+            );
             if (m_has_highscore) {
                 auto part = std::upper_bound(m_leaderboard.begin(), m_leaderboard.end(), m_game_ptr->get_score(),
                     [](const auto lhs, const auto& rhs){
@@ -376,8 +396,8 @@ namespace Tetris::States {
                     }
                 );
                 draws(m_leaderboard.begin(), part);
-                BitmapFontRenderer::draw_string_line(m_font, m_player_name, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
-                BitmapFontRenderer::draw_int64(m_font, m_game_ptr->get_score(), m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale);
+                BitmapFontRenderer::draw_string_line(m_font, m_player_name, m_leaderboard_offset.x + players_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale, text_scale);
+                BitmapFontRenderer::draw_int64(m_font, m_game_ptr->get_score(), m_leaderboard_offset.x + scores_offset * m_font->tile_size() * text_scale, m_leaderboard_offset.y + y_off, text_scale, text_scale);
                 // TODO - draw a cursor instead of blinking and changing colors
                 if (m_curr_ch) {
                     SDL_FRect text_cursor = {
@@ -390,7 +410,7 @@ namespace Tetris::States {
                         SDL_SetRenderDrawColor(m_renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
                         SDL_RenderFillRect(m_renderer, &text_cursor);
                     }
-                    BitmapFontRenderer::draw_char(m_font, m_curr_ch, m_leaderboard_offset.x + (m_player_name.length() + players_offset) * text_scale * m_font->tile_size(), m_leaderboard_offset.y + y_off, text_scale);
+                    BitmapFontRenderer::draw_char(m_font, m_curr_ch, m_leaderboard_offset.x + (m_player_name.length() + players_offset) * text_scale * m_font->tile_size(), m_leaderboard_offset.y + y_off, text_scale, text_scale);
                 }
                 y_off += text_scale * 12;
                 draws(part, m_leaderboard.end());
@@ -439,6 +459,7 @@ namespace Tetris::States {
     }
 
     void GameOverState::exit(void) {
+        MIX_StopTrack(m_curr_track->get(), MIX_TrackMSToFrames(m_curr_track->get(), 300));
         if (m_has_highscore) {
             m_leaderboard.push_score(m_game_ptr->get_score(), m_player_name);
         }
@@ -501,24 +522,104 @@ namespace Tetris::States {
         Score::Leaderboard& leaderboard,
         std::span<Tetris::Piece3D> blocks_wireframe,
         std::span<Tetris::Piece3D> blocks_filled,
-        SDL_WindowID window_id
+        SDL_WindowID window_id,
+        std::span<TEngine::Sound::Track> tracks
     ) :
-        m_runstate{this, game_ptr, tetris_keys, font, renderer},
+        m_runstate{this, game_ptr, tetris_keys, font, tracks, renderer},
         m_menustate{this, game_ptr, menu_ptr, tetris_keys, renderer, font},
-        m_gameoverstate(this, game_ptr, renderer, font, leaderboard, blocks_wireframe, window_id),
+        m_gameoverstate(this, game_ptr, renderer, tracks, font, leaderboard, blocks_wireframe, window_id),
         m_states{ &m_menustate, &m_runstate, &m_gameoverstate },
         m_current{m_states.at(STATE_MAIN_MENU)},
         m_blocks_wireframe(blocks_wireframe),
         m_blocks_filled(blocks_filled),
-        m_switching(false),
-        m_next{-1}
+        m_mixer{tracks.back().m_mixer},
+        m_font{font},
+        m_volume_timer{0},
+        m_next{-1},
+        m_gain_to_draw(0),
+        m_switching(false)
     {
         m_current->enter();
     }
 
     void TetrisStateMachine::update(double delta) {
         update_state();
+        m_volume_timer.done(delta);
         m_current->update(delta);
+    }
+
+    void TetrisStateMachine::event(TEngine::Events::IEvent& event) {
+        using namespace TEngine::Events;
+        EventDispatcher ed{event};
+        const auto handle_key = [this](auto& key_event) -> bool {
+            if (key_event.scancode == SDL_SCANCODE_I) {
+                float vol = MIX_GetMixerGain(m_mixer->get());
+                vol += 0.05f;
+                vol = std::min(vol, 1.0f);
+                MIX_SetMixerGain(m_mixer->get(), vol);
+                m_gain_to_draw = vol;
+                m_volume_timer = {3};
+                return true;
+            } else if (key_event.scancode == SDL_SCANCODE_K) {
+                float vol = MIX_GetMixerGain(m_mixer->get());
+                vol -= 0.05f;
+                vol = std::max(vol, 0.0f);
+                MIX_SetMixerGain(m_mixer->get(), vol);
+                m_gain_to_draw = vol;
+                m_volume_timer = {3};
+                return true;
+            }
+            return false;
+        };
+
+        ed.dispatch<MouseWheelEvent>([this](MouseWheelEvent& ev){
+            TEngine::Vec2 actual_dir = ev.get_scroll_dir() * (ev.flipped ? -1 : 1);
+            if (actual_dir.y > 0) {
+                float vol = MIX_GetMixerGain(m_mixer->get());
+                vol += 0.02f;
+                vol = std::min(vol, 1.0f);
+                MIX_SetMixerGain(m_mixer->get(), vol);
+                m_gain_to_draw = vol;
+                m_volume_timer = {3};
+                return true;
+            } else if (actual_dir.y < 0) {
+                float vol = MIX_GetMixerGain(m_mixer->get());
+                vol -= 0.02f;
+                vol = std::max(vol, 0.0f);
+                MIX_SetMixerGain(m_mixer->get(), vol);
+                m_gain_to_draw = vol;
+                m_volume_timer = {3};
+                return true;
+            }
+            return false;
+        });
+
+        ed.dispatch<KeyPressedEvent>([this, handle_key](KeyPressedEvent& ev){ return handle_key(ev); });
+        ed.dispatch<KeyRepeatEvent>([this, handle_key](KeyRepeatEvent& ev){ return handle_key(ev); });
+        if (!event.handled) {
+            m_current->event(event);
+        }
+    }
+
+    void TetrisStateMachine::draw(void) {
+        m_current->draw();
+        if (!m_volume_timer.done(0)) {
+            using TEngine::Text::BitmapFontRenderer::draw_int64;
+            // draw_int64(m_font, static_cast<std::int64_t>(m_gain_to_draw * 100), 10, 10, 4, 4);
+            float threshold = 0.5f;
+            if (m_volume_timer.time <= threshold) {
+                std::uint8_t a = 0;
+                SDL_GetTextureAlphaMod(m_font->get_texture_atlas().get_texture().get(), &a);
+                SDL_SetTextureAlphaMod(
+                    m_font->get_texture_atlas().get_texture().get(),
+                    static_cast<std::uint8_t>(TEngine::fmap_to_range(0, threshold, 0, 1, m_volume_timer.time) * 255)
+                );
+                draw_int64(m_font, static_cast<std::int64_t>(m_gain_to_draw * 100), 10, 10, 4, 4);
+                SDL_SetTextureAlphaMod(m_font->get_texture_atlas().get_texture().get(), a);
+            } else {
+                draw_int64(m_font, static_cast<std::int64_t>(m_gain_to_draw * 100), 10, 10, 4, 4);
+            }
+        }
     }
 
     void TetrisStateMachine::switch_to(int id) {

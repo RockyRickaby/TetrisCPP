@@ -57,7 +57,10 @@ namespace Tetris {
             // m_blink = m_switch_block.get_time_left() - 0.75f;
         } else {
             // not really a press, but prevents having to double-tap space to actually start the game
-            m_read_any = true;
+            if (!m_read_any) {
+                m_switch_block.reset();
+                m_read_any = true;
+            }
             // m_blink -= delta_t;
             m_blink = m_switch_block.get_time_left() - 0.75f;
             if (m_blink <= -0.75) {
@@ -82,9 +85,9 @@ namespace Tetris {
     void MainMenu::event(TEngine::Events::IEvent& event) {
         using namespace TEngine::Events;
         
-        // alternative version to instantiating an EventDispatcher
-        dispatch_event<KeyRepeatEvent>(event, [this](KeyRepeatEvent& f_event){ return OnKeyRepeat(f_event); });
-        dispatch_event<KeyPressedEvent>(event, [this](KeyPressedEvent& f_event){ return OnKeyPressed(f_event); });
+        EventDispatcher ed{event};
+        ed.dispatch<KeyRepeatEvent>([this](KeyRepeatEvent& f_event){ return OnKeyRepeat(f_event); });
+        ed.dispatch<KeyPressedEvent>([this](KeyPressedEvent& f_event){ return OnKeyPressed(f_event); });
     }
 
     void MainMenu::draw(void) {
@@ -106,7 +109,7 @@ namespace Tetris {
             STR_TETRIS_TITLE,
             (960 - scale * m_font->tile_size() * STR_TETRIS_TITLE.size()) / 2.0f,
             m_offset_y,
-            scale
+            scale, scale
         );
 
         if (m_offset_y < 720.0f / 2.0f - (10 * m_font->tile_size()) && m_blink >= 0) {
@@ -116,7 +119,7 @@ namespace Tetris {
                 STR_PRESS_SPACE,
                 (960 - scale * m_font->tile_size() * STR_PRESS_SPACE.size()) / 2.0f,
                 m_offset_y + 64 * scale,
-                scale
+                scale, scale
             );
         }
     }
@@ -150,16 +153,15 @@ namespace Tetris {
         return false;
     }
 
-    bool MainMenu::OnKeyRepeat(TEngine::Events::KeyRepeatEvent& event) {
-        std::cout << "REGISTERING KEYDOWN EVENT: " << event.scancode << std::endl;
-        return true;
+    bool MainMenu::OnKeyRepeat(TEngine::Events::KeyRepeatEvent&) {
+        return false;
     }
     
-    bool MainMenu::OnMousePressed(TEngine::Events::IEvent&) {
+    bool MainMenu::OnMousePressed(TEngine::Events::MousePressedEvent&) {
         return false;
     }
 
-    bool MainMenu::OnMouseReleased(TEngine::Events::IEvent&) {
+    bool MainMenu::OnMouseReleased(TEngine::Events::MouseReleasedEvent&) {
         return false;
     }
 

@@ -6,11 +6,11 @@
 #include "../texture_wrapper.hpp"
 
 namespace TEngine::Text {
-    // copying this struct will ONLY COPY THE POINTERS, NOT THE UNDERLYING DATA.
-    // this struct has a destructor that frees the internal texture data.
     struct BitmapText {
-        SDL_Renderer* renderer;
+        SDL_Renderer* renderer = nullptr;
         TextureWrapper text_data;
+        int scale_width = 0;
+        int scale_height = 0;
     };
 
     namespace BitmapFontRenderer {
@@ -35,23 +35,30 @@ namespace TEngine::Text {
         // (which should be set again after drawing the colored text in order to get the orignal colors).
         // This function also assumes that the font's base color is white. Alpha values are ignored
         Color set_text_color_mod(BitmapFont* f, Color color);
+        std::uint8_t set_text_alpha_mod(BitmapFont* f, std::uint8_t alpha);
 
-        void draw_char(BitmapFont* f, char ch, float x, float y, float scale, float angle = 0, TextFlipMode flipmode = {});
+        void draw_char(BitmapFont* f, char ch, float x, float y, float scale_width, float scale_height, float angle = 0, TextFlipMode flipmode = {});
         // it might be better to call make_bitmap_text_str() to cache the results or draw_string_line()
         // instead of this one. while the pre-processing might not necessarily be expensive,
         // it will be repeated every time the string is drawn, which might
         // become costly for drawing many (and bigger) strings
-        void draw_string(BitmapFont* f, std::string_view str, float x, float y, float scale, float angle = 0, TextFlipMode flipmode = {});
+        void draw_string(BitmapFont* f, std::string_view str, float x, float y, float scale_width, float scale_height, float angle = 0, TextFlipMode flipmode = {});
         // draws a single string containing a single line straight to the screen using the font's
         // SDL_Renderer pointer
-        void draw_string_line(BitmapFont* f, std::string_view str, float x, float y, float scale, float angle = 0, TextFlipMode flipmode = {});
+        void draw_string_line(BitmapFont* f, std::string_view str, float x, float y, float scale_width, float scale_height, float angle = 0, TextFlipMode flipmode = {});
         // draws a number straight to the screen using the font's SDL_Renderer pointer
-        void draw_int64(BitmapFont* f, std::int64_t num, float x, float y, float scale, float angle = 0);
-        void draw_float(BitmapFont* f, float num, float x, float y, float scale, float angle = 0);
-        void draw_double(BitmapFont* f, double num, float x, float y, float scale, float angle = 0);
+        void draw_int64(BitmapFont* f, std::int64_t num, float x, float y, float scale_width, float scale_height, float angle = 0);
+        void draw_float(BitmapFont* f, float num, float x, float y, float scale_width, float scale_height, float angle = 0);
+        void draw_double(BitmapFont* f, double num, float x, float y, float scale_width, float scale_height, float angle = 0);
     }
     
-    inline void draw_bitmap_text(const BitmapText& text, const SDL_FRect& target_rect) {
+    inline void draw_bitmap_text(const BitmapText& text, float screen_x, float screen_y, float width, float height) {
+        SDL_FRect target_rect = {
+            screen_x,
+            screen_y,
+            text.scale_width * width,
+            text.scale_height * height
+        };
         SDL_RenderTexture(text.renderer, text.text_data.get(), nullptr, &target_rect);
     }
 }

@@ -2,6 +2,7 @@
 
 #include <string_view>
 
+// unlikely to ever be used anywhere else, as it is strongly related to the Tetris logic
 namespace TetrisUtils {
     // assumes rot has size >=2 and only contains the characters 0, R, 2, L and, optionally, - and > (to form a little arrow)
     // results are undefined if any of the characters are not those listed here
@@ -29,5 +30,21 @@ namespace TetrisUtils {
             res += lst_c - '0';
         }
         return res;
+    }
+
+    inline constexpr int rotint_to_a_idx(int rotint) {
+        switch(rotint) {
+            case 0: return 0;
+            case rotstr_to_int("0->R"): return 1;
+            case rotstr_to_int("2->R"): return 1;
+            case rotstr_to_int("2->L"): return 3;
+            case rotstr_to_int("0->L"): return 3;
+            case rotstr_to_int("L->0"): return 0;
+            case rotstr_to_int("R->0"): return 0;
+            case rotstr_to_int("R->2"): return 2;
+            case rotstr_to_int("L->2"): return 2;
+            default:
+                return {};
+        }
     }
 }

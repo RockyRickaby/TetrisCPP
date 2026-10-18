@@ -59,7 +59,7 @@ namespace TEngine::Sprites {
         void insert_offsets(spriteid_type sprite_id, int offset_x, int offset_y);
         // offsets correspond to screen position in pixels.
         // scale refers to the scale of the sprite relative to its size
-        void draw(spriteid_type sprite_id, float offset_x, float offset_y, float scale, float angle = 0, SpriteFlipMode flipmode = {});
+        void draw(spriteid_type sprite_id, float offset_x, float offset_y, float scale_width, float scale_height, float angle = 0, SpriteFlipMode flipmode = {});
     private:
         int m_tile_w = 0;
         int m_tile_h = 0;
@@ -67,10 +67,11 @@ namespace TEngine::Sprites {
         int m_atlas_w = 0;
         int m_atlas_h = 0;
         SDL_Renderer* m_renderer = nullptr;
-        TextureWrapper m_texture{nullptr};
+        TextureWrapper m_texture;
         std::unordered_map<spriteid_type, std::pair<int, int>> m_id_to_offsets;
     };
 
+    // TODO - finish all of these down below
     struct KeyFrame {
         Countdown duration;
         SpriteAtlas::spriteid_type sprite_id;

@@ -55,7 +55,7 @@ namespace Tetris::Score {
             }
 
             if (!fs::exists(m_path)) {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, std::format("file '{}' does not exist", m_path.string()).c_str());
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "%s", std::format("file '{}' does not exist", m_path.string()).c_str());
                 m_data.clear();
                 return false;
             }
@@ -76,7 +76,7 @@ namespace Tetris::Score {
             for (int i = 0; i < size; i += entry_size) {
                 ScoreEntry dto_entry;
                 std::memcpy(&dto_entry, entries.data() + i, entry_size);
-                m_data.emplace_back(std::move(dto_entry));
+                m_data.emplace_back(dto_entry);
                 fn(m_data.back());
             }
             return true;
@@ -104,7 +104,7 @@ namespace Tetris::Score {
 
                 const auto end = name.size() > ScoreEntry::player_name_max_length ? name.cbegin() + ScoreEntry::player_name_max_length : name.cend();
                 std::copy(name.cbegin(), end, score.player_name.begin());
-                m_data.push_back(score);
+                m_data.emplace_back(score);
 
                 std::memcpy(entries.data() + off, &score, entry_size);
                 off += entry_size;
@@ -157,7 +157,7 @@ namespace Tetris::Score {
                 const auto end = name.size() > ScoreEntry::player_name_max_length ? name.cbegin() + ScoreEntry::player_name_max_length : name.cend();
                 std::copy(name.cbegin(), end, score.player_name.begin());
 
-                m_scores.emplace_back(std::move(score));
+                m_scores.emplace_back(score);
             }
             return true;
         }

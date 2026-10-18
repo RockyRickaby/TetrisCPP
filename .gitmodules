@@ -2,5 +2,5 @@
 	path = vendored/SDL
 	url = https://github.com/libsdl-org/SDL.git
 [submodule "SDL_mixer"]
-	path = SDL_mixer
+	path = vendored/SDL_mixer
 	url = https://github.com/libsdl-org/SDL_mixer

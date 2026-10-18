@@ -1,10 +1,12 @@
 #pragma once
 
 #include "tengine.hpp"
+#include <SDL3/SDL_mouse.h>
 #include <cstdint>
 #include <functional>
 #include <typeindex>
 #include <variant>
+#include <cassert>
 #include <vector>
 #include <utility>
 #include <SDL3/SDL.h>
@@ -22,7 +24,8 @@ namespace TEngine {
             KeyPressed, KeyRepeat, KeyReleased,
             MousePressed, MouseReleased, MouseMoved, MouseWheel,
             WindowResized,
-            TextInput, TextEditing
+            TextInput, TextEditing, // neither has been implemented yet (and maybe will never be)
+            ApplicationExit
         };
 
         // All main events have to implement this interface to work
@@ -35,6 +38,11 @@ namespace TEngine {
 
             virtual EventType get_event_type() const = 0;
             virtual const char* get_name() const = 0;
+        };
+
+        class ApplicationExitEvent : public IEvent {
+        public:
+            EVENT_CLASS_TYPE(ApplicationExit);
         };
 
         class KeyPressedEvent : public IEvent {
@@ -115,10 +123,10 @@ namespace TEngine {
 
             EVENT_CLASS_TYPE(MouseMoved)
         private:
-            float m_x;
-            float m_y;
-            float m_dx;
-            float m_dy;
+            float m_x = 0;
+            float m_y = 0;
+            float m_dx = 0;
+            float m_dy = 0;
         };
 
         class MouseWheelEvent : public IEvent {
@@ -137,10 +145,10 @@ namespace TEngine {
             const bool flipped;
             EVENT_CLASS_TYPE(MouseWheel)
         private:
-            float m_x;
-            float m_y;
-            float m_dx;
-            float m_dy;
+            float m_x = 0;
+            float m_y = 0;
+            float m_dx = 0;
+            float m_dy = 0;
         };
 
         class WindowResizedEvent : public IEvent {
@@ -181,12 +189,34 @@ namespace TEngine {
             EVENT_CLASS_TYPE(TextEditing)
         };
 
-        // not really necessary unless polymorphic event listeners are neeed.
-        // as long as you have a function that takes an event, you can use the event dispatcher
-        class EventListener {
+        // // not really necessary unless polymorphic event listeners are neeed.
+        // // as long as you have a function that takes an event, you can use the event dispatcher
+        // class AuxiliaryEventListener {
+        // public:
+        //     virtual ~AuxiliaryEventListener() = default;
+        //     virtual void event(IEvent&) = 0;
+        // };
+
+        // handful abstract class for implementing event methods
+        class IEventListener {
         public:
-            virtual ~EventListener() = default;
-            virtual void event(IEvent&) = 0;
+            virtual ~IEventListener() = default;
+            // keyboard events
+            virtual bool OnKeyPressed(KeyPressedEvent&) { return false; }
+            virtual bool OnKeyReleased(KeyReleasedEvent&) { return false; }
+            virtual bool OnKeyRepeat(KeyRepeatEvent&) { return false; }
+
+            // mouse events
+            virtual bool OnMousePressed(MousePressedEvent&) { return false; }
+            virtual bool OnMouseReleased(MouseReleasedEvent&) { return false; }
+            virtual bool OnMouseMoved(MouseMovedEvent&) { return false; }
+            virtual bool OnMouseScroll(MouseWheelEvent&) { return false; }
+
+            // window events
+            virtual bool OnWindowResize(WindowResizedEvent&) { return false; }
+
+            // exit event
+            virtual bool OnApplicationExit(ApplicationExitEvent&) { return false; }
         };
 
         // convenience function. it constructs the Event on the stack
@@ -197,67 +227,56 @@ namespace TEngine {
             { receiver.event(evemt) } -> std::same_as<void>;
         })
         void forward_event(R& receiver, Args&& ...args) {
-            auto ev = Event{std::forward<Args>(args)...};
+            Event ev{std::forward<Args>(args)...};
             receiver.event(ev);
         }
+
+        template<typename...>
+        inline constexpr bool __always_false = false;
         
-        // handful abstract class for implementing event methods
-        class EventListenerFunctions {
-        public:
-            virtual ~EventListenerFunctions() = default;
-            // keyboard events
-            virtual bool OnKeyPressed(KeyPressedEvent&) { return false; }
-            virtual bool OnKeyReleased(KeyReleasedEvent&) { return false; }
-            virtual bool OnKeyRepeat(KeyRepeatEvent&) { return false; }
-
-            // mouse events
-            virtual bool OnMousePressed(MousePressedEvent&) { return false; }
-            virtual bool OnMouseReleased(MouseReleasedEvent&) { return false; }
-            virtual bool OnMouseMoved(MouseMovedEvent&) { return false; }
-            virtual bool OnMouseScroll(MouseWheelEvent&) { return false; };
-
-            // window events
-            virtual bool OnWindowResize(WindowResizedEvent&) { return false; };
-        };
+        template<typename Event, typename Listener, typename ...Args> requires(
+            std::is_base_of_v<IEvent, Event> && std::is_base_of_v<IEventListener, Listener>
+        )
+        bool forward_event_to_listener(Listener& listener, Args&& ...args) {
+            Event event{std::forward<Args>(args)...};
+            if      constexpr (std::is_same_v<Event, KeyPressedEvent>) { return listener.OnKeyPressed(event); }
+            else if constexpr (std::is_same_v<Event, KeyRepeatEvent>) { return listener.OnKeyRepeat(event); }
+            else if constexpr (std::is_same_v<Event, KeyReleasedEvent>) { return listener.OnKeyReleased(event); }
+            else if constexpr (std::is_same_v<Event, MousePressedEvent>) { return listener.OnMousePressed(event); }
+            else if constexpr (std::is_same_v<Event, MouseReleasedEvent>) { return listener.OnMouseReleased(event); }
+            else if constexpr (std::is_same_v<Event, MouseMovedEvent>) { return listener.OnMouseMoved(event); }
+            else if constexpr (std::is_same_v<Event, MouseWheelEvent>) { return listener.OnMouseScroll(event); }
+            else if constexpr (std::is_same_v<Event, ApplicationExitEvent>) { return listener.OnApplicationExit(event); }
+            else { static_assert(__always_false<Event>, "Unhandled event type"); }
+        }
 
         template<typename FN, typename EventType>
         concept DispatcherCallback = requires(FN fn, EventType ev) {
             { fn(ev) } -> std::same_as<bool>;
         } && std::is_base_of_v<IEvent, EventType>;
 
-        // This is an alternative to the dispatch_event(IEvent&) function
         class EventDispatcher final {
         public:
             EventDispatcher(IEvent& event) : m_event{event} {}
-            // This function should be called for all events that you may want to respond to.
+            // This function should be called for all events that you may want to handle.
             // Example:
-            // dispatch_event<MouseEvent>(event);
-            // dispatch_event<KeyEvent>(event);
+            // dispatch_event<MouseEvent>(<some lambda or function pointer>));
+            // dispatch_event<KeyEvent>(<some lambda or function pointer>));
+            // returns true only when the event is actually handled.
+            // returns false if either the event was not handled or if the types are mismatched
+            // (in which case it won't be handled anyway)
             template<typename EventType, DispatcherCallback<EventType> EventCallback> requires(std::is_base_of_v<IEvent, EventType>)
             bool dispatch(EventCallback f) {
                 if (m_event.get_event_type() == EventType::get_static_type() && !m_event.handled) {
-                    m_event.handled = f(*dynamic_cast<EventType*>(&m_event));
-                    return true;
+                    assert(dynamic_cast<EventType*>(&m_event) != nullptr && "static type and actual type do not match!!");
+                    m_event.handled = f(static_cast<EventType&>(m_event));
+                    return m_event.handled;
                 }
                 return false;
             }
         private:
             IEvent& m_event;
         };
-
-        // This function should be called for all events that you may want to respond to.
-        // This is an alternative to the EventDispatcher class
-        // Example:
-        // dispatch_event<MouseEvent>(event);
-        // dispatch_event<KeyEvent>(event);
-        template<typename EventType, DispatcherCallback<EventType> EventCallback> requires(std::is_base_of_v<IEvent, EventType>)
-        bool dispatch_event(IEvent& event, EventCallback f) {
-            if (event.get_event_type() == EventType::get_static_type() && !event.handled) {
-                event.handled = f(*dynamic_cast<EventType*>(&event));
-                return true;
-            }
-            return false;
-        }
 
         class ICustomEvent {
         public:

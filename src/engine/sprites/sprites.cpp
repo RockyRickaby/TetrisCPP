@@ -55,7 +55,7 @@ namespace TEngine::Sprites {
         m_id_to_offsets.insert_or_assign(sprite_id, std::make_pair(offset_x, offset_y));
     }
 
-    void SpriteAtlas::draw(int sprite_id, float offset_x, float offset_y, float scale, float angle, SpriteFlipMode flipmode) {
+    void SpriteAtlas::draw(int sprite_id, float offset_x, float offset_y, float scale_width, float scale_height, float angle, SpriteFlipMode flipmode) {
         auto [x, y] = m_id_to_offsets.at(sprite_id);
         SDL_FRect source = {
             .x = static_cast<float>(x) * m_tile_w - 0.01f,
@@ -65,12 +65,12 @@ namespace TEngine::Sprites {
         };
         const float x_offset_fix_to_use_when_using_rotations_when_it_is_slightly_off_centered_for_no_apparent_reason
             // = -1.0f * scale;
-            = 0.0f * scale;
+            = 0.0f * scale_width;
         SDL_FRect dest = {
             .x = offset_x + x_offset_fix_to_use_when_using_rotations_when_it_is_slightly_off_centered_for_no_apparent_reason,
             .y = offset_y,
-            .w = static_cast<float>(m_tile_w) * scale,
-            .h = static_cast<float>(m_tile_h) * scale
+            .w = static_cast<float>(m_tile_w) * scale_width,
+            .h = static_cast<float>(m_tile_h) * scale_height
         };
         SDL_FlipMode flip = static_cast<SDL_FlipMode>(flipmode);
         SDL_RenderTextureRotated(
@@ -84,7 +84,7 @@ namespace TEngine::Sprites {
     }
 
     void SpriteEntity::draw_frame(SpriteAtlas::spriteid_type frame) {
-        m_atlas->draw(frame, position.x, position.y, scale, rotation, flipmode);
+        m_atlas->draw(frame, position.x, position.y, scale, scale, rotation, flipmode);
     }
 
     void SpriteEntity::draw() {

@@ -8,8 +8,8 @@
 #include "fonts.hpp"
 
 namespace TEngine::Text {
-    void BitmapFont::draw_char(char c, float offset_x, float offset_y, float scale, float angle, TextFlipMode flipmode) {
-        m_atlas.draw(static_cast<int>(c), offset_x, offset_y, scale, angle, flipmode);
+    void BitmapFont::draw_char(char c, float offset_x, float offset_y, float scale_width, float scale_height, float angle, TextFlipMode flipmode) {
+        m_atlas.draw(static_cast<int>(c), offset_x, offset_y, scale_width, scale_height, angle, flipmode);
     }
 
     BitmapFont::BitmapFont(BitmapFont&& other) noexcept :
@@ -59,5 +59,10 @@ namespace TEngine::Text {
     BitmapFont& BitmapFont::operator=(BitmapFont other) {
         swap(*this, other);
         return *this;
+    }
+
+    TTFFont TTFFont::load_font(const std::filesystem::path &font_path, SDL_Renderer *renderer) {
+        TTFFont f{renderer};
+        return f;
     }
 }

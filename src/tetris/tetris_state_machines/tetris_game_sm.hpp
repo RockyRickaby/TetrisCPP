@@ -6,6 +6,7 @@
 #include "../../engine/state_machine.hpp"
 // #include "../../engine/tengine.hpp"
 #include "../../engine/events.hpp"
+#include "../../engine/sound/audio.hpp"
 #include "../../engine/text/fonts.hpp"
 #include "../tetris_scoreboard.hpp"
 #include "../tetris_game.hpp"
@@ -69,16 +70,26 @@ namespace Tetris::States {
 
     class RunGameState final : public TEngine::StateMachine::State {
     public:
-        RunGameState(TetrisStateMachine* sm, Game* game, Tetris::Keybinds* tetris_keys, TEngine::Text::BitmapFont* font, SDL_Renderer* renderer) :
+        RunGameState(
+            TetrisStateMachine* sm,
+            Game* game,
+            Tetris::Keybinds* tetris_keys,
+            TEngine::Text::BitmapFont* font,
+            std::span<TEngine::Sound::Track> tracks,
+            SDL_Renderer* renderer
+        ) :
             m_run_state(),
             m_game_ptr{game},
             m_parent_sm(sm),
             m_tetris_keys(tetris_keys),
             m_renderer{renderer},
+            m_curr_track{nullptr},
             m_font{font},
             m_begin_countdown{3},
             m_pause_countdown{0},
             m_go_count{1},
+            m_music{tracks},
+            m_over_c{0},
             m_pause{false}
         {}
 
@@ -105,6 +116,7 @@ namespace Tetris::States {
         TetrisStateMachine *m_parent_sm;
         Tetris::Keybinds* m_tetris_keys;
         SDL_Renderer *m_renderer;
+        TEngine::Sound::Track* m_curr_track;
         TEngine::Text::BitmapFont* m_font;
         
         TEngine::Countdown m_begin_countdown;
@@ -112,6 +124,9 @@ namespace Tetris::States {
         
         TEngine::OneShotTimer m_go_count;
 
+        std::span<TEngine::Sound::Track> m_music;
+
+        int m_over_c;
         bool m_pause;
     };
 
@@ -129,6 +144,7 @@ namespace Tetris::States {
             TetrisStateMachine *sm,
             Game* game,
             SDL_Renderer *renderer,
+            std::span<TEngine::Sound::Track> tracks,
             TEngine::Text::BitmapFont* font,
             Score::Leaderboard& leaderboard,
             std::span<Tetris::Piece3D> blocks_wireframe,
@@ -136,6 +152,8 @@ namespace Tetris::States {
         ) :
             m_game_ptr{game},
             m_sm_ptr{sm},
+            m_curr_track{nullptr},
+            m_tracks{tracks},
             // m_input_event_handler(input_event_h),
             m_font{font},
             m_blocks_wireframe{blocks_wireframe},
@@ -169,6 +187,8 @@ namespace Tetris::States {
     private:
         Game *m_game_ptr;
         TetrisStateMachine *m_sm_ptr;
+        TEngine::Sound::Track* m_curr_track;
+        std::span<TEngine::Sound::Track> m_tracks;
         TEngine::Text::BitmapFont* m_font;
         std::span<Tetris::Piece3D> m_blocks_wireframe;
         std::span<Tetris::Piece3D>::reverse_iterator m_block;
@@ -217,12 +237,13 @@ namespace Tetris::States {
             Score::Leaderboard& leaderboard,
             std::span<Tetris::Piece3D> blocks_wireframe,
             std::span<Tetris::Piece3D> blocks_filled,
-            SDL_WindowID window_id
+            SDL_WindowID window_id,
+            std::span<TEngine::Sound::Track> tracks
         );
         void update(double delta_t) override;
         // void handle_input(void) override { m_current->handle_input(); }
-        void event(TEngine::Events::IEvent& event) override { m_current->event(event); }
-        void draw(void) override { m_current->draw(); }
+        void event(TEngine::Events::IEvent& event) override;
+        void draw(void) override;
         void switch_to(int id);
     private:
         void update_state(void);
@@ -236,7 +257,11 @@ namespace Tetris::States {
         // maybe we'll use these
         std::span<Tetris::Piece3D> m_blocks_wireframe;
         std::span<Tetris::Piece3D> m_blocks_filled;
-        bool m_switching;
+        TEngine::Sound::Mixer* m_mixer;
+        TEngine::Text::BitmapFont* m_font;
+        TEngine::OneShotTimer m_volume_timer;
         int m_next;
+        float m_gain_to_draw;
+        bool m_switching;
     };
 }

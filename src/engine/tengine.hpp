@@ -5,11 +5,13 @@
 #include <SDL3/SDL_video.h>
 #include <cmath>
 #include <cstdint>
+#include <format>
 #include <iostream>
 #include <SDL3/SDL.h>
 #include <random>
 #include <type_traits>
 
+// TODO - separate this into different headers. Have tengine.hpp include them (core header)
 namespace TEngine {
     struct AppMetadata {
         const char* name;
@@ -144,18 +146,18 @@ namespace TEngine {
         float x = 0;
         float y = 0;
 
-        float length() const { return std::sqrtf(x * x + y * y); }
-        float dot(const Vec2 other) const { return (x * other.x) + (y * other.y); }
-        float cross2D(const Vec2 other) const { return (x * other.y) - (y * other.x); }
+        constexpr float length() const { return std::sqrt(x * x + y * y); }
+        constexpr float dot(const Vec2 other) const { return (x * other.x) + (y * other.y); }
+        constexpr float cross2D(const Vec2 other) const { return (x * other.y) - (y * other.x); }
 
-        Vec2 normalize() const {
+        constexpr Vec2 normalize() const {
             float len = length();
             return {
                 x / len,
                 y / len
             };
         }
-        Vec2 rotate(float angle) const {
+        constexpr Vec2 rotate(float angle) const {
             auto c = std::cos(angle);
             auto s = std::sin(angle);
             return {
@@ -164,16 +166,55 @@ namespace TEngine {
             };
         }
 
-        Vec2& operator+=(const Vec2 other);
-        Vec2& operator-=(const Vec2 other);
-        Vec2& operator*=(float scalar);
+        constexpr friend Vec2 operator+(const Vec2 lhs, const Vec2 rhs) {
+            float x1 = lhs.x + rhs.x;
+            float y1 = lhs.y + rhs.y;
+            return Vec2{x1, y1};
+        }
 
-        friend Vec2 operator+(const Vec2 lhs, const Vec2 rhs);
-        friend Vec2 operator-(const Vec2 lhs, const Vec2 rhs);
-        friend Vec2 operator*(const Vec2 vec, float scalar);
-        friend Vec2 operator*(float scalar, const Vec2 vec);
-        friend bool operator==(const Vec2 lhs, const Vec2 rhs);
-        friend bool operator!=(const Vec2 lhs, const Vec2 rhs);
+        constexpr friend Vec2 operator*(const Vec2 vec, float scalar) {
+            float x1 = vec.x * scalar;
+            float y1 = vec.y * scalar;
+            return Vec2{x1, y1};
+        }
+
+        constexpr friend Vec2 operator*(float scalar, const Vec2 vec) {
+            return vec * scalar;
+        }
+
+        constexpr friend Vec2 operator-(const Vec2 lhs, const Vec2 rhs) {
+            float x1 = lhs.x - rhs.x;
+            float y1 = lhs.y - rhs.y;
+            return Vec2{x1, y1};
+        }
+
+        constexpr Vec2& operator+=(const Vec2 other) {
+            x += other.x;
+            y += other.y;
+            return *this;
+        }
+
+        constexpr Vec2& operator-=(const Vec2 other) {
+            x -= other.x;
+            y -= other.y;
+            return *this;
+        }
+
+        constexpr Vec2& operator*=(float scalar) {
+            x *= scalar;
+            y *= scalar;
+            return *this;
+        }
+
+        constexpr friend bool operator==(const Vec2 lhs, const Vec2 rhs) {
+            return lhs.x == rhs.x
+                && lhs.y == rhs.y;
+        }
+
+        constexpr friend bool operator!=(const Vec2 lhs, const Vec2 rhs) {
+            // return lhs.x != rhs.x || lhs.y != rhs.y;
+            return !(lhs == rhs);
+        }
 
         friend std::ostream& operator<<(std::ostream& output, const Vec2& v);
     };
@@ -183,15 +224,15 @@ namespace TEngine {
         float y = 0;
         float z = 0;
 
-        float length() const { return std::sqrtf(x * x + y * y + z * z); }
-        float dot(const Vec3 other) const {
+        constexpr float length() const { return std::sqrt(x * x + y * y + z * z); }
+        constexpr float dot(const Vec3 other) const {
             return
                 (x * other.x) +
                 (y * other.y) +
                 (z * other.z);
         }
 
-        Vec3 normalize() const {
+        constexpr Vec3 normalize() const {
             float len = length();
             return {
                 x / len,
@@ -199,7 +240,8 @@ namespace TEngine {
                 z / len
             };
         }
-        Vec3 cross(const Vec3 other) const {
+        
+        constexpr Vec3 cross(const Vec3 other) const {
             return {
                 (y * other.z) - (z * other.y),
                 (z * other.x) - (x * other.z),
@@ -207,50 +249,99 @@ namespace TEngine {
             };
         }
 
-        Vec3& operator+=(const Vec3 other);
-        Vec3& operator-=(const Vec3 other);
-        Vec3& operator*=(float scalar);
+        constexpr friend Vec3 operator+(const Vec3 lhs, const Vec3 rhs) {
+            float x1 = lhs.x + rhs.x;
+            float y1 = lhs.y + rhs.y;
+            float z1 = lhs.z + rhs.z;
+            return Vec3{x1, y1, z1};
+        }
 
-        friend Vec3 operator+(const Vec3 lhs, const Vec3 rhs);
-        friend Vec3 operator-(const Vec3 lhs, const Vec3 rhs);
-        friend Vec3 operator*(const Vec3 vec, float scalar);
-        friend Vec3 operator*(float scalar, const Vec3 vec);
-        friend bool operator==(const Vec3 lhs, const Vec3 rhs);
-        friend bool operator!=(const Vec3 lhs, const Vec3 rhs);
+        constexpr friend Vec3 operator*(const Vec3 vec, float scalar) {
+            float x1 = vec.x * scalar;
+            float y1 = vec.y * scalar;
+            float z1 = vec.z * scalar;
+            return Vec3{x1, y1, z1};
+        }
+
+        constexpr friend Vec3 operator*(float scalar, const Vec3 vec) {
+            return vec * scalar;
+        }
+
+        constexpr friend Vec3 operator-(const Vec3 lhs, const Vec3 rhs) {
+            float x1 = lhs.x - rhs.x;
+            float y1 = lhs.y - rhs.y;
+            float z1 = lhs.z - rhs.z;
+            return Vec3{x1, y1, z1};
+        }
+
+        constexpr Vec3& operator+=(const Vec3 other) {
+            x += other.x;
+            y += other.y;
+            z += other.z;
+            return *this;
+        }
+
+        constexpr Vec3& operator-=(const Vec3 other) {
+            x -= other.x;
+            y -= other.y;
+            z -= other.z;
+            return *this;
+        }
+
+        constexpr Vec3& operator*=(float scalar) {
+            x *= scalar;
+            y *= scalar;
+            z *= scalar;
+            return *this;
+        }
+
+        constexpr friend bool operator==(const Vec3 lhs, const Vec3 rhs) {
+            return lhs.x == rhs.x
+                && lhs.y == rhs.y
+                && lhs.z == rhs.z;
+        }
+
+        constexpr friend bool operator!=(const Vec3 lhs, const Vec3 rhs) {
+            return !(lhs == rhs) ;
+        }
 
         friend std::ostream& operator<<(std::ostream& output, const Vec3& v);
     };
 
     // TODO - move these to TEngine::Math, probably
     // ... in a new file called tengine_math.hpp
-    template<typename T>
-    requires(requires(T a, float t){
-        { a + a } -> std::same_as<T>;
-        { t * a } -> std::same_as<T>;
-        { a * t } -> std::same_as<T>;
-    })
-    T __lerp_values(T a, T b, float t) {
+    // template<typename T>
+    // requires(requires(T a, float t){
+    //     { a + a } -> std::same_as<T>;
+    //     { t * a } -> std::same_as<T>;
+    //     { a * t } -> std::same_as<T>;
+    // })
+    // T __lerp_values(T a, T b, float t) {
+    //     t = std::min(std::max(0.0f, t), 1.0f);
+    //     return (1 - t) * a + b * t;  
+    // }
+
+    inline float lerpf(float a, float b, float t) {
+        t = std::min(std::max(0.0f, t), 1.0f);
+        return (1 - t) * a + b * t;  
+    }
+    
+    inline double lerpd(double a, double b, float t) {
         t = std::min(std::max(0.0f, t), 1.0f);
         return (1 - t) * a + b * t;  
     }
 
-    inline float lerpf(float a, float b, float t) {
-        return __lerp_values(a, b, t);
-    }
-    
-    inline double lerpd(double a, double b, float t) {
-        return __lerp_values(a, b, t);
-    }
-
     inline Vec2 lerpv2(Vec2 a, Vec2 b, float t) {
-        return __lerp_values(a, b, t);
+        t = std::min(std::max(0.0f, t), 1.0f);
+        return (1 - t) * a + b * t;  
     }
 
     inline Vec3 lerpv3(Vec3 a, Vec3 b, float t) {
-        return __lerp_values(a, b, t);
+        t = std::min(std::max(0.0f, t), 1.0f);
+        return (1 - t) * a + b * t;  
     }
 
-    inline float fmap_to_range(float input_begin, float input_end, float output_begin, float output_end, float t) {
+    inline constexpr float fmap_to_range(float input_begin, float input_end, float output_begin, float output_end, float t) {
         float slope = (output_end - output_begin) / (input_end - input_begin);
         return output_begin + slope * (t - input_begin);
     }
@@ -323,3 +414,84 @@ namespace TEngine {
         }
     }
 }
+
+template<>
+struct std::formatter<TEngine::Vec2> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        if (*ctx.begin() != '}') {
+            throw std::format_error("Vec2 formatter: no specifiers allowed.");
+        }
+        return ctx.begin();
+    }
+
+    auto format(TEngine::Vec2 v, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "({},{})", v.x, v.y);
+    }
+};
+
+template<>
+struct std::formatter<TEngine::Vec3> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        if (*ctx.begin() != '}') {
+            throw std::format_error("Vec3 formatter: no specifiers allowed.");
+        }
+        return ctx.begin();
+    }
+
+    auto format(TEngine::Vec3 v, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "({},{},{})", v.x, v.y, v.z);
+    }
+};
+
+template<>
+struct std::formatter<TEngine::ColorHSB> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        if (*ctx.begin() != '}') {
+            throw std::format_error("ColorHSB formatter: no specifiers allowed.");
+        }
+        return ctx.begin();
+    }
+
+    auto format(const TEngine::ColorHSB& c, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "{} {} {} {}", c.hue, c.sat, c.bri, c.alpha);
+    }
+};
+
+template<>
+struct std::formatter<TEngine::Color> {
+    bool __hex = false;
+    bool __include_alpha = false;
+    bool __capital_hex = false;
+    constexpr auto parse(std::format_parse_context& ctx) {
+        auto pos = ctx.begin();
+        while (pos != ctx.end() && *pos != '}') {
+            if (*pos == 'x' || *pos == 'X') {
+                __hex = true;
+                __capital_hex = *pos == 'X';
+            } else if (*pos == 'a' || *pos == 'A') {
+                __include_alpha = true;
+            } else {
+                throw std::format_error("Color formatter: only formatters allowed are x, X, a and A");
+            }
+            ++pos;
+        }
+        return pos;
+    }
+
+    auto format(TEngine::Color c, std::format_context& ctx) const {
+        if (__hex) {
+            uint32_t shift = __include_alpha ? 0u : 8u;
+            uint32_t mask = __include_alpha ? ~0u : 0u;
+            uint32_t v = (c.r << (24 - shift)) | (c.g << (16 - shift)) | (c.b << (8 - shift)) | (c.a & mask); 
+            if (__capital_hex) {
+                return std::format_to(ctx.out(), "#{:0<{}X}", v, __include_alpha ? 8 : 6);
+            }
+            return std::format_to(ctx.out(), "#{:0<{}x}", v, __include_alpha ? 8 : 6);
+        }
+        
+        if (__include_alpha) {
+            return std::format_to(ctx.out(), "{} {} {} {}", c.r, c.g, c.b, c.a);
+        }
+        return std::format_to(ctx.out(), "{} {} {}", c.r, c.g, c.b);
+    }
+};

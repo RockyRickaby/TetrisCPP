@@ -1,32 +1,49 @@
-#include <SDL3/SDL_blendmode.h>
 #include <SDL3/SDL_render.h>
 #include <memory>
+#include <print>
+#include <ranges>
 #include <algorithm>
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
 
 #include "tetris_game.hpp"
 #include "../engine/text/text_renderer.hpp"
 #include "../engine/utils.hpp"
 #include "tetris_pieces.hpp"
+#include "tetris_utils.hpp"
 
 // this may not be good practice, but whatever
 using namespace TEngine; // Vec2, Color, Text
 
 namespace Tetris {
-    Game::Game(SDL_Renderer* renderer, int screen_width, int screen_height, float block_scale, Text::BitmapFont* font, SDL_Texture* mino_texture) :
+    Game::Game(
+        SDL_Renderer* renderer,
+        int screen_width,
+        int screen_height,
+        float block_scale,
+        Text::BitmapFont* font,
+        SDL_Texture* mino_texture,
+        TEngine::Sound::Mixer* mixer
+    ) :
         m_renderer{renderer},
         m_scale{block_scale},
         m_board_offset_x{(screen_width - COLUMNS * block_scale) / 2.0f},
         m_board_offset_y{(screen_height - ROWS * block_scale) / 2.0f},
         m_queue_offset_x{m_board_offset_x + (COLUMNS + 1.07f) * m_scale},
         m_queue_offset_y{m_board_offset_y + 6 * m_scale},
+        m_mixer{mixer},
         m_text_font{font},
         m_mino_texture{mino_texture}
     {
         m_playfield_matrix.fill(Color{});
         m_line_block_count.fill(0);
 
-        m_scoreboard.default_speed = m_piece_drop_timer.get_countdown_time();
-        m_scoreboard.speed = m_piece_drop_timer.get_countdown_time();
+        // m_scoreboard.default_speed = m_piece_drop_timer.get_countdown_time();
+        // m_scoreboard.speed = m_piece_drop_timer.get_countdown_time();
+
+        m_adv_scoreboard.__default_speed = m_piece_drop_timer.get_countdown_time();
+        m_adv_scoreboard.speed = m_piece_drop_timer.get_countdown_time();
+        m_scoreboard_events.reset(this);
 
         // set_piece_queue<Bag::OnePiece<Tetrimino::Type::O>>();
         set_piece_queue<Bag::Standard>();
@@ -54,9 +71,11 @@ namespace Tetris {
         
         m_piece_drop_timer.reset();
         m_pieces_bag->reset();
-        m_scoreboard.reset();
+        // m_scoreboard.reset();
+        m_adv_scoreboard.reset();
+        m_scoreboard_events.reset(this);
         m_piece_lock.reset();
-        reset_piece_lock_timer();
+        // m_piece_lock.reset();
 
         m_held = {};
         m_ghost = {};
@@ -70,7 +89,7 @@ namespace Tetris {
 
     // returns false when the game is over.
     // returns true if the game can still go on.
-    // the game must be restarted manually once the game is over
+    // the game must be restarted manually once its over
     bool Game::update(double delta_t) {
         bool placed = false;
         const auto update_fn = [this, delta_t](bool& placed) -> bool {
@@ -82,12 +101,18 @@ namespace Tetris {
         };
 
         const auto gameover_fn = [this](){
+            MIX_PlayTag(m_mixer->get(), "gameover", 0);
             m_update_state = GameUpdateState::GGameover;
-            return true;
+            m_scoreboard_events.reset(this);
+            return false;
+        };
+
+        const auto scoreboard_adv_fn = [this]{
+            m_adv_scoreboard.update();
+            m_piece_drop_timer.set_countdown_time(m_adv_scoreboard.speed);
         };
 
         bool need_regen_playfield = false;
-        // TODO - right now, the game will do nothing after the game is over. change this to something else later, idk
         switch (m_update_state) {
             case GameUpdateState::GPiece: {
                 bool updated = update_fn(placed);
@@ -102,11 +127,20 @@ namespace Tetris {
                         if (!update_playfield(delta_t)) {
                             // if the animation is supposed to play, this branch is taken
                             m_update_state = GameUpdateState::GPlayfield;
+                            if (m_update_playfield_routine.m_cleared == 4) {
+                                MIX_PlayTag(m_mixer->get(), "line_clear1", 0);
+                            } else {
+                                MIX_PlayTag(m_mixer->get(), "line_clear3", 0);
+                            }
                         }
                     } else if (m_piece_spawn.get_countdown_time() > 0) {
                         m_update_state = GameUpdateState::GSpawn;
+                        MIX_PlayTag(m_mixer->get(), "piece_lock", 0);
                     } else if (!place_and_spawn_next_piece()) {
                         return gameover_fn();
+                    } else {
+                        MIX_PlayTag(m_mixer->get(), "piece_lock", 0);
+                        scoreboard_adv_fn();
                     }
                 }
             } break;
@@ -121,6 +155,7 @@ namespace Tetris {
                             return gameover_fn();
                         }
                         m_update_state = GameUpdateState::GPiece;
+                        scoreboard_adv_fn();
                     }
                     // because the animation isn't "instantaneous", set countdown to almost done
                     // so that the piece spawns almost immediately after the playfield is updated,
@@ -136,6 +171,7 @@ namespace Tetris {
                     if (!spawn_next_piece()) {
                         return gameover_fn();
                     }
+                    scoreboard_adv_fn();
                     m_hold_recently_swapped = false;
                     m_update_state = GameUpdateState::GPiece;
                 }
@@ -158,6 +194,7 @@ namespace Tetris {
         if (need_regen_playfield) {
             regen_playfield();
         }
+        m_scoreboard_events.update(delta_t);
         return true;
     }
 
@@ -170,12 +207,15 @@ namespace Tetris {
     }
 
     void Game::set_level(int level) {
-        m_scoreboard.set_level(level);
-        m_piece_drop_timer.set_countdown_time(m_scoreboard.speed);
+        // m_scoreboard.set_level(level);
+        m_adv_scoreboard.set_level(level);
+        // m_piece_drop_timer.set_countdown_time(m_scoreboard.speed);
+        m_piece_drop_timer.set_countdown_time(m_adv_scoreboard.speed);
     }
 
     int64_t Game::get_score(void) {
-        return m_scoreboard.score;
+        // return m_scoreboard.score;
+        return m_adv_scoreboard.score;
     }
 
     void Game::draw() {
@@ -200,6 +240,7 @@ namespace Tetris {
         draw_text_elements();
 
         m_update_playfield_gameover.draw(this);
+        m_scoreboard_events.draw();
     }
 
     bool Game::try_move(bool &moved_down) {
@@ -218,6 +259,7 @@ namespace Tetris {
                 if (m_nextdir.y < 0) {
                     m_piece_drop_timer.reset();
                     moved_down = true;
+                    m_adv_scoreboard.push_action(ScoreSystemAdvanced::ScoreActions::SoftDrop);
                 }
             }
             m_nextdir = __invalid_move_vec;
@@ -254,7 +296,11 @@ namespace Tetris {
             }
         }
         if (m_hard_drop) {
-            perform_hard_drop(m_current);
+            int lines_dropped = perform_hard_drop(m_current);
+            while (lines_dropped) {
+                m_adv_scoreboard.push_action(ScoreSystemAdvanced::ScoreActions::HardDrop);
+                lines_dropped -= 1;
+            }
             m_hard_drop = false;
             return placed = place_current_piece();
         }
@@ -268,30 +314,31 @@ namespace Tetris {
         // undo test move
         m_current.move(Vec2{0,1});
         // m_piece_lock.piece_alpha = std::max(m_piece_lock.timer.get_time_left() * 2.0, 0.2);
-        m_piece_lock.piece_alpha = TEngine::fmap_to_range(0.0f, 0.5f, 0.25f, 1.0f, m_piece_lock.timer.get_time_left());
         // NOTE - issues with this part may be caused by the input handling that happens outside of this class
         if (is_downwards_obstructed) {
+            m_piece_lock.piece_alpha = TEngine::fmap_to_range(0.0f, 0.5f, 0.25f, 1.0f, m_piece_lock.timer.get_time_left());
             m_piece_lock.prev_y = m_current.get_position().y + m_current.get_min().y;
             // to have infinite placement lock down, just remove the lock.moves check
             if ((moved || rotated) && m_piece_lock.moves > 0) {
                 m_piece_lock.moves -= 1;
                 m_piece_lock.timer.reset();
                 // std::cout << m_piece_lock.moves << std::endl;
-                // reset_piece_lock_timer();
+                // m_piece_lock.reset();
             } else if (m_piece_lock.timer.done(delta_t)) {
                 // std::cout << "locking\n";
                 return placed = place_current_piece();
             }
         } else {
             if (moved_down && m_current.get_position().y + m_current.get_min().y < m_piece_lock.prev_y) {
-                reset_piece_lock_timer();
+                m_piece_lock.reset();
             }
+            m_piece_lock.piece_alpha = 1;
             
             // this timer will auto-reset itself (and by the place_and_spawn_next_piece() function as well)
             if (m_piece_drop_timer.done(delta_t)) {
                 if (m_min.y > 0 && !moved_down) {
                     m_current.move(Vec2{ 0, -1 });
-                    reset_piece_lock_timer();
+                    m_piece_lock.reset();
                     if (check_collision(m_current)) {
                         m_current.move(Vec2{ 0, 1 });
                         return placed = place_current_piece();
@@ -313,9 +360,12 @@ namespace Tetris {
     }
 
     bool Game::update_playfield(double delta_t) {
-        const auto scoreboard_callback = [this](int cleared){
-            m_scoreboard.update(cleared);
-            m_piece_drop_timer.set_countdown_time(m_scoreboard.speed);
+        const auto scoreboard_callback = [this](int cleared, int highest_line){
+            (void)highest_line;
+            // m_scoreboard.update(cleared);
+            // m_piece_drop_timer.set_countdown_time(m_scoreboard.speed);
+            m_adv_scoreboard.push_action(static_cast<ScoreSystemAdvanced::ScoreActions>(1u << (cleared - 1)));
+            // m_scoreboard_events.enable_texts_for(static_cast<ScoreSystemAdvanced::ScoreActions>(1u << (cleared - 1)));
         };
         return m_update_playfield_routine(this, delta_t, scoreboard_callback);
     }
@@ -390,7 +440,7 @@ namespace Tetris {
             Vec2 v = *it;
             size_t x = static_cast<size_t>(v.x);
             size_t y = static_cast<size_t>(v.y);
-            collides = TEngine::TUtils::color_to_int32(m_playfield_matrix[x + y * COLUMNS]) != 0;
+            collides = m_playfield_matrix[x + y * COLUMNS] != Color{};
         }
         return collides;
     }
@@ -424,17 +474,67 @@ namespace Tetris {
         return false;
     }
 
-    void Game::perform_hard_drop(Tetrimino::Piece &p) {
+    int Game::perform_hard_drop(Tetrimino::Piece &p) {
+        int lines_dropped = 0;
         while (!check_collision(p)) {
             p.move(Vec2{0,-1});
+            lines_dropped += 1;
         }
         // we hit something... move up to unstuck
         p.move(Vec2{0,1});
+        lines_dropped -= 1;
+        return lines_dropped;
+    }
+
+    void Game::check_and_award_tspin(const Tetrimino::Piece &p, int rot_point) {
+        if (p.get_type() != Tetrimino::Type::T) {
+            return;
+        }
+        const auto pos = p.get_position();
+        std::array<Vec2, 4> corners = {
+            // top
+            pos + Vec2{-1, 1}, // a
+            pos + Vec2{1, 1}, // b
+            // base
+            pos + Vec2{1, -1}, // d
+            pos + Vec2{-1, -1}, // c
+        };
+
+        int a = TetrisUtils::rotint_to_a_idx(p.get_rotation_state());
+        int b = (a + 1) % 4;
+        int d = (a + 2) % 4;
+        int c = (a + 3) % 4;
+
+        const auto check = [this](Vec2 p){
+            return p.x < 0 || p.y < 0 || p.x >= COLUMNS || m_playfield_matrix[p.x + p.y * COLUMNS] != Color{};
+        };
+        bool is_full = (check(corners[a]) && check(corners[b])) && (check(corners[c]) || check(corners[d]));
+        bool is_mini = (check(corners[c]) && check(corners[d])) && (check(corners[a]) || check(corners[b]));
+        
+        m_adv_scoreboard.erase_spin();
+        if (is_full) {
+            if (rot_point == 5) {
+                m_adv_scoreboard.is_5rot_spin = true;
+            }
+            m_adv_scoreboard.push_action(ScoreSystemAdvanced::ScoreActions::TSpin);
+            m_scoreboard_events.enable_texts_for(ScoreSystemAdvanced::ScoreActions::TSpin);
+        } else if (is_mini) {
+            if (rot_point == 5) {
+                m_adv_scoreboard.is_5rot_spin = true;
+                m_adv_scoreboard.push_action(ScoreSystemAdvanced::ScoreActions::TSpin);
+                m_scoreboard_events.enable_texts_for(ScoreSystemAdvanced::ScoreActions::TSpin);
+            } else {
+                m_adv_scoreboard.push_action(ScoreSystemAdvanced::ScoreActions::MiniTSpin);
+                m_scoreboard_events.enable_texts_for(ScoreSystemAdvanced::ScoreActions::MiniTSpin);
+            }
+        }
     }
 
     bool Game::perform_wallkick(Tetrimino::Piece &p) {
-        // first test case - regular rotation with no kicks
+       // first test case - regular rotation with no kicks
+        int rotation_point = 1;
         if (!check_collision(p)) {
+            check_and_award_tspin(p, rotation_point);
             return true;
         }
         // no allocations
@@ -446,11 +546,14 @@ namespace Tetris {
             kicks = &__Internal::WallkickData::WALLKICKS_ANY.at(p.get_rotation_state());
         }
         // other kick tests are handled here
+        rotation_point += 1;
         for (Vec2 kick : *kicks) {
             p.move(kick);
             if (check_collision(p)) {
                 p.move(kick * -1); // undo kick if it's not successful
+                rotation_point += 1;
             } else {
+                check_and_award_tspin(p, rotation_point);
                 return true;
             }
         }
@@ -632,13 +735,13 @@ namespace Tetris {
             m_text_font, "HOLD",
             m_board_offset_x - 4.05f * m_scale,
             m_board_offset_y + 2.40f * m_scale,
-            m_scale / 11.5f
+            m_scale / 11.5f, m_scale / 11.5f
         );
         Text::BitmapFontRenderer::draw_string_line(
             m_text_font, "NEXT",
             m_board_offset_x + (COLUMNS + 1.4f) * m_scale,
             m_board_offset_y + 4.785f * m_scale,
-            m_scale / 11.5f
+            m_scale / 11.5f, m_scale / 11.5f
         );
 
         float score_x_offset = m_board_offset_x + (COLUMNS + 1) * m_scale;
@@ -647,13 +750,13 @@ namespace Tetris {
             m_text_font, "SCORE",
             score_x_offset,
             m_board_offset_y + score_y_offset * m_scale,
-            m_scale / 11.5f
+            m_scale / 11.5f, m_scale / 11.5f
         );
         Text::BitmapFontRenderer::draw_int64(
-            m_text_font, m_scoreboard.score,
+            m_text_font, m_adv_scoreboard.score,
             score_x_offset,
             m_board_offset_y + (score_y_offset + 1) * m_scale,
-            m_scale / 11.5f
+            m_scale / 11.5f, m_scale / 11.5f
         );
 
         float level_x_offset = 4.5f;
@@ -662,13 +765,13 @@ namespace Tetris {
             m_text_font, "LEVEL",
             m_board_offset_x - level_x_offset * m_scale,
             m_board_offset_y + level_y_offset * m_scale,
-            m_scale / 11.5f
+            m_scale / 11.5f, m_scale / 11.5f
         );
         Text::BitmapFontRenderer::draw_int64(
-            m_text_font, m_scoreboard.level,
+            m_text_font, m_adv_scoreboard.level,
             m_board_offset_x - level_x_offset * m_scale,
             m_board_offset_y + (level_y_offset + 1) * m_scale,
-            m_scale / 11.5f
+            m_scale / 11.5f, m_scale / 11.5f
         );
     }
     
@@ -765,7 +868,6 @@ namespace Tetris {
             speed = calculate_speed();
         } else {
             goal = 10;
-
         }
     }
 
@@ -775,6 +877,263 @@ namespace Tetris {
             res *= (0.8 - ((level - 1) * 0.007));
         }
         return res;
+    }
+
+
+    void Game::ScoreSystemAdvanced::erase_spin(void) {
+        if (!is_5rot_spin) {    
+            constexpr unsigned int tspins_mask =
+                static_cast<unsigned int>(ScoreActions::MiniTSpin) |
+                static_cast<unsigned int>(ScoreActions::TSpin);
+            __performed_actions &= ~(tspins_mask);
+        }
+    }
+
+    void Game::ScoreSystemAdvanced::push_action(ScoreActions action) {
+        using enum ScoreActions;
+        
+        const unsigned int act = static_cast<unsigned int>(action);
+        constexpr unsigned int line_clear_mask =
+            static_cast<unsigned int>(Single) |
+            static_cast<unsigned int>(Double) |
+            static_cast<unsigned int>(Triple) |
+            static_cast<unsigned int>(Tetris);
+        constexpr unsigned int tspins_mask =
+            static_cast<unsigned int>(MiniTSpin) |
+            static_cast<unsigned int>(TSpin);
+        // have we already set a line clear action? or perhaps a spin action?
+        if (
+            (act & line_clear_mask && __performed_actions & line_clear_mask) ||
+            (act & tspins_mask && __performed_actions & tspins_mask)
+        ) {
+            return;
+        }
+        switch(action) {
+            case None: break;
+            case SoftDrop: __soft_lines += 1; break;
+            case HardDrop: __hard_lines += 1; break;
+            default: __performed_actions |= act; break;
+        }
+    }
+
+    void Game::ScoreSystemAdvanced::update(void) {
+        int score_to_add = 0;
+        int cleared = 0;
+        switch(static_cast<ScoreActions>(__performed_actions)) {
+            using enum ScoreActions;
+            case Single: {
+                cleared = 1;
+                score_to_add = 100;
+                __is_back_to_back = false;
+            } break;
+            case Double: {
+                cleared = 2;
+                score_to_add = 300;
+                __is_back_to_back = false;
+            } break;
+            case Triple: {
+                cleared = 3;
+                score_to_add = 500;
+                __is_back_to_back = false;
+            } break;
+            case Tetris: {
+                cleared = 4;
+                score_to_add = 800;
+            } break;
+            case MiniTSpin: score_to_add = 100; break;
+            case TSpin: score_to_add = 400; break;
+            case MiniTSpinSingle: score_to_add = 200; break;
+            case TSpinSingle: score_to_add = 800; break;
+            case TSpinDouble: score_to_add = 1200; break;
+            case TSpinTriple: score_to_add = 1600; break;
+            default:
+                break;
+        }
+        // TODO - implement back to back bonuses
+        // if (__is_back_to_back) {
+        //     score_to_add += (score_to_add / 2);
+        // }
+        __performed_actions = 0;
+
+        score += score_to_add * level;
+        score += __soft_lines;
+        score += __hard_lines * 2;
+
+        __soft_lines = 0;
+        __hard_lines = 0;
+
+        __lines_cleared += cleared;
+        if (level < max_level && __lines_cleared >= __goal) {
+            level = level + 1;
+            level = level > max_level ? max_level : level;
+            speed = calculate_speed();
+            __goal = 10;
+            __lines_cleared = 0;
+        }
+
+        is_5rot_spin = false;
+    }
+
+    void Game::ScoreSystemAdvanced::reset(void) {
+        score = 0;
+        level = 1;
+        __lines_cleared = 0;
+        speed = __default_speed;
+        is_5rot_spin = false;
+
+        __soft_lines = 0;
+        __hard_lines = 0;
+        __performed_actions = static_cast<unsigned int>(ScoreActions::None);
+        __is_back_to_back = false;
+    }
+
+    void Game::ScoreSystemAdvanced::set_level(int new_level) {
+        if (new_level > 1) {
+            __goal = new_level * __lines_to_clear_per_level_multiplier;
+            level = new_level;
+            speed = calculate_speed();
+        } else {
+            __goal = 10;
+        }
+    }
+
+    double Game::ScoreSystemAdvanced::calculate_speed(void) {
+        double res = 1;
+        for (int exp = level - 1; exp > 0; --exp) {
+            res *= (0.8 - ((level - 1) * 0.007));
+        }
+        return res;
+    }
+
+    void Game::ScoreEventsTextManager::reset(Game* game_ptr) {
+        ongoing_texts.clear();
+        using namespace TEngine::Text;
+        m_game_ptr = game_ptr;
+        if (!init) {
+            events_text[0] = {BitmapFontRenderer::make_bitmap_text_str(game_ptr->m_text_font, "Single")};
+            events_text[1] = {BitmapFontRenderer::make_bitmap_text_str(game_ptr->m_text_font, "Double")};
+            events_text[2] = {BitmapFontRenderer::make_bitmap_text_str(game_ptr->m_text_font, "Triple")};
+            events_text[3] = {BitmapFontRenderer::make_bitmap_text_str(game_ptr->m_text_font, "Tetris")};
+            events_text[4] = {BitmapFontRenderer::make_bitmap_text_str(game_ptr->m_text_font, "MiniTSpin")};
+            events_text[5] = {BitmapFontRenderer::make_bitmap_text_str(game_ptr->m_text_font, "TSpin")};
+
+            init = true;
+        }
+    }
+
+    void Game::ScoreEventsTextManager::enable_texts_for(ScoreSystemAdvanced::ScoreActions action, int height) {
+        int idx = 0;
+        using enum ScoreSystemAdvanced::ScoreActions;
+        switch (action) {
+            // holy moly
+            case Single: idx = 0; break;
+            case Double: idx = 1; break;
+            case Triple: idx = 2; break;
+            case Tetris: idx = 3; break;
+            case MiniTSpin: idx = 4; break;
+            case TSpin: idx = 5; break;
+            default:
+                return;
+        }
+        // move ~tres textos de altura para cima
+        auto& text = events_text[idx];
+        Vec2 pos{};
+        if (action == MiniTSpin || action == TSpin) {
+            auto y_aux = (ROWS - 4) - m_game_ptr->m_current.get_position().y;
+            auto x_aux = m_game_ptr->m_current.get_position().x;
+            
+            pos = (Vec2{x_aux, y_aux} * m_game_ptr->m_scale)
+                - Vec2{(text.scale_width * 2) / 2.0f, 0} 
+                + Vec2{m_game_ptr->m_board_offset_x, m_game_ptr->m_board_offset_y};
+        } else {
+            pos = Vec2{
+                -4.25f,
+                std::max(
+                    (ROWS - 2) - (static_cast<float>(height - 1)),
+                    static_cast<float>(ROWS - 10)
+                )
+            } * m_game_ptr->m_scale + Vec2{m_game_ptr->m_board_offset_x, m_game_ptr->m_board_offset_y};
+        }
+        ongoing_texts.emplace_back(Countdown{2, false}, pos, idx, 15);
+    }
+
+    void Game::ScoreEventsTextManager::update(double delta_t) {
+        for (auto& text : ongoing_texts) {
+            text.visible_duration.done(delta_t);
+            text.position.y -= text.time_to_speed() * delta_t;
+        }
+
+        // auto it = ongoing_texts.end();
+        auto to_remove_begin = std::remove_if(
+            ongoing_texts.begin(),
+            ongoing_texts.end(),
+            [](EventText& ev_text){ return ev_text.visible_duration.done(0); }
+        );
+        ongoing_texts.erase(to_remove_begin, ongoing_texts.end());
+    }
+
+    int Game::ScoreEventsTextManager::EventText::time_to_speed() {
+        static constexpr float start_speed = 60.0f;
+        static constexpr std::array m_text_speeds = {
+            1.00f * start_speed,
+            0.97f * start_speed,
+            0.87f * start_speed,
+            0.74f * start_speed,
+            0.58f * start_speed,
+            0.42f * start_speed,
+            0.26f * start_speed,
+            0.13f * start_speed,
+            0.04f * start_speed,
+            // 0.00f * start_speed,
+        };
+        float f = fmap_to_range(
+            0,
+            visible_duration.get_countdown_time(),
+            0,
+            static_cast<float>(m_text_speeds.size() - 1),
+            visible_duration.get_countdown_time() - visible_duration.get_time_left()
+        );
+        return m_text_speeds.at(static_cast<int>(f));
+    }
+
+    void Game::ScoreEventsTextManager::draw() {
+        for (auto& text_ev : ongoing_texts) {
+            if (!text_ev.visible_duration.done(0)) {
+                float threshold = 1.0f;
+                if (text_ev.visible_duration.get_time_left() <= threshold) {
+                    SDL_SetTextureAlphaMod(
+                        events_text[text_ev.text_idx].text_data.get(),
+                        static_cast<uint8_t>(TEngine::fmap_to_range(
+                            0,
+                            threshold,
+                            0,
+                            1,
+                            text_ev.visible_duration.get_time_left()
+                        ) * 255)
+                    );
+                } else {
+                    SDL_SetTextureAlphaMod(events_text[text_ev.text_idx].text_data.get(), SDL_ALPHA_OPAQUE);
+                }
+
+                TEngine::Text::draw_bitmap_text(
+                    events_text[text_ev.text_idx],
+                    text_ev.position.x,
+                    text_ev.position.y,
+                    2,
+                    4
+                );
+            }
+        }
+    }
+
+
+
+
+    void Game::PieceLockdownTimer::reset(void) {
+        timer.reset();
+        moves = 15;
+        prev_y = -1;
+        piece_alpha = 1.0f;
     }
 
     void Game::PlayfieldUpdateRoutineAnimated::reset() {
@@ -793,7 +1152,8 @@ namespace Tetris {
         for (int i = 0; i < ROWS + BUFFER && static_cast<int>(rows_to_clean_n) > 0; ++i) {
             if (game_ptr->m_line_block_count[i] == 10) {
                 rows_to_clean_n--;
-                game_ptr->m_line_block_count[i] = 0;
+                // TODO - remember this..
+                // game_ptr->m_line_block_count[i] = 0;
                 curr++;
             } else {
                 if (curr - prev > 0) {
@@ -809,7 +1169,8 @@ namespace Tetris {
     void Game::PlayfieldUpdateRoutineAnimated::pull_down(Game *game_ptr) {
         for (auto it = m_ranges_to_remove.rbegin(); it != m_ranges_to_remove.rend(); ++it) {
             const auto [fst, snd] = *it;
-            m_cleared += (snd - fst);
+            // TODO - remember this... this is now calculated at the start of the routine
+            // m_cleared += (snd - fst);
             std::move(
                 game_ptr->m_playfield_matrix.begin() + (snd * COLUMNS),
                 game_ptr->m_playfield_matrix.end(),
@@ -880,5 +1241,52 @@ namespace Tetris {
             std::fill(game_ptr->m_line_block_count.end() - (snd - fst), game_ptr->m_line_block_count.end(), 0);
         }
         return cleared;
+    }
+
+    bool Game::PlayfieldUpdateRoutineGameOver::operator()(Game* game_ptr, double delta_t) {
+        if (!initial_delay.done(delta_t)) {
+            return true;
+        }
+        if (move_black_screen) {
+            if (black_screen_pos.y < -black_screen_dimensions.y) {
+                black_screen_pos = {0, -black_screen_dimensions.y};
+            }
+            black_screen_pos.y += black_screen_dimensions.y * 2.0f * delta_t;
+            if (black_screen_pos.y >= 0) {
+                move_black_screen = false;
+                initial_delay.time = 1.40;
+                row = 0;
+                return false;
+            }
+            return true;
+        } else if (animation_timer.done(delta_t)) { // this timer auto-resets
+            TEngine::Color fill = {};
+            // this routine auto-resets..
+            if (row >= ROWS + BUFFER) {
+                // animation_timer.reset();
+                move_black_screen = true;
+                return true;
+            }
+            if (row < ROWS - 2) {
+                fill = TEngine::TUtils::color_from_hex("#808080");
+            }
+            std::fill(
+                game_ptr->m_playfield_matrix.begin() + row * COLUMNS,
+                game_ptr->m_playfield_matrix.begin() + COLUMNS + row * COLUMNS,
+                fill);
+            row++;
+        }
+        return true;
+    }
+
+    void Game::PlayfieldUpdateRoutineGameOver::draw(Game* game_ptr) {
+        SDL_FRect r {
+            .x = black_screen_pos.x,
+            .y = black_screen_pos.y,
+            .w = black_screen_dimensions.x,
+            .h = black_screen_dimensions.y
+        };
+        SDL_SetRenderDrawColor(game_ptr->m_renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+        SDL_RenderFillRect(game_ptr->m_renderer, &r);
     }
 }
