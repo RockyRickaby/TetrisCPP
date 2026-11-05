@@ -1,6 +1,10 @@
+
+
+
+
 # Tetris in C++
 
-![Gameplay gif of Tetris C++](tetris.webp)
+https://github.com/user-attachments/assets/2b11ee85-d743-4686-a7be-775e4c1a33bd
 
 Yet another personal project of mine: a (overengineered) Tetris implementation (again)! The first time I made a Tetris clone it was rather... bad. I like to believe I have improved since then.
 
